@@ -12,3 +12,10 @@ android/app/src/main/assets/www/
 # JSON-паки генератора (для игры экспортируются в levels/*.js)
 core/levels/
 local.properties
+
+# внутренние рабочие заметки и материалы — не для публичного репозитория
+PLAN.md
+IMPROVEMENTS.md
+probe.html
+docs/reference-arrow-map.md
+core/reference/

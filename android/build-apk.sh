@@ -10,7 +10,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 AND="$ROOT/android"
 B="$AND/.build"
-TOOLCHAIN="${TOOLCHAIN:-/home/roman/mini harness/my_mini_agent/android/.build}"
+TOOLCHAIN="${TOOLCHAIN:-$HOME/mini harness/my_mini_agent/android/.build}"
 T=/tmp/wazegame-ab
 
 # --- веб-часть игры → assets/www --------------------------------------------
