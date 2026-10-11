@@ -528,7 +528,8 @@
     if (game.board) {
       const L = layout();
       Object.assign(view, WG.input.clampView(
-        view, L.cell * game.board.w, L.cell * game.board.h, game.cssW, game.cssH
+        view, L.cell * game.board.w, L.cell * game.board.h, game.cssW, game.cssH,
+        { ox: L.ox, oy: L.oy, top: WG.render.PLAY_TOP, bottom: WG.render.PLAY_BOTTOM }
       ));
     }
     draw();

@@ -207,6 +207,30 @@ test('полная генерация (ремонт + добивка + поез�
 });
 
 // ---- зум/пан (IMP B5): чистая view-математика ----
+test('clampView с box: при зуме видны оба края смещённого поля, пустоты за краем нет', () => {
+  WG.input.setMaxScale(6);
+  try {
+  // поле 300×500 мировых px, лежит с отступом (20, 100); видимая полоса по вертикали — [90, 557]
+  const box = { ox: 20, oy: 100, top: 90, bottom: 110 };
+  const W = 340;
+  const H = 667;
+  const s = 4;
+  // тянем максимально вниз-вправо: левый/верхний край поля прижат к краю полосы
+  const a = WG.input.clampView({ scale: s, tx: 1e6, ty: 1e6 }, 300, 500, W, H, box);
+  assert.ok(Math.abs(20 * s + a.tx - 12) < 1e-9, 'левый край поля у левого края экрана');
+  assert.ok(Math.abs(100 * s + a.ty - (90 + 12)) < 1e-9, 'верх поля под HUD');
+  // тянем вверх-влево: правый/нижний край поля доступен
+  const b = WG.input.clampView({ scale: s, tx: -1e6, ty: -1e6 }, 300, 500, W, H, box);
+  assert.ok(Math.abs(320 * s + b.tx - (W - 12)) < 1e-9, 'правый край поля достижим');
+  assert.ok(Math.abs(600 * s + b.ty - (H - 110 - 12)) < 1e-9, 'низ поля над бустерами');
+  // масштаб 1: вид нейтрален — layout уже поставил поле (300×447) по центру полосы [90, 557]
+  const c = WG.input.clampView({ scale: 1, tx: 50, ty: 50 }, 300, 447, W, H, box);
+  assert.ok(Math.abs(c.tx) < 1e-9 && Math.abs(c.ty) < 1e-9);
+  } finally {
+    WG.input.setMaxScale(WG.input.MAX_SCALE);
+  }
+});
+
 test('screenToWorld/clampView: обратимость и границы поля', () => {
   const v = { scale: 2, tx: -100, ty: -50 };
   const w = WG.input.screenToWorld(v, 300, 400);

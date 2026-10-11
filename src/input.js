@@ -24,33 +24,51 @@
   }
 
   // Вид не даёт полю (bw×bh мировых px) вылезти за канвас; если поле влезает — вид нейтрален
-  // (layout уже центрирует поле, пановать в запас смысла нет)
-  function clampView(view, bw, bh, cssW, cssH) {
+  // (layout уже центрирует поле, пановать в запас смысла нет).
+  // box (необязательно) — где поле лежит в мире и какая часть экрана для него видна:
+  // { ox, oy, top, bottom } — без него поле считается начинающимся в (0, 0) на весь экран
+  const PAN_SLACK = 12; // чуть-чуть «воздуха» у края поля при прокрутке
+  function clampView(view, bw, bh, cssW, cssH, box) {
     const scale = Math.max(MIN_SCALE, Math.min(maxScale, view.scale));
-    const axis = (t, size, screen) => {
-      if (size * scale <= screen) return 0;
-      return Math.min(0, Math.max(screen - size * scale, t));
+    if (!box) {
+      const axis = (t, size, screen) => {
+        if (size * scale <= screen) return 0;
+        return Math.min(0, Math.max(screen - size * scale, t));
+      };
+      return { scale, tx: axis(view.tx, bw, cssW), ty: axis(view.ty, bh, cssH) };
+    }
+    // Поле занимает [o, o + size] в мире, на экране — [o·s + t, (o + size)·s + t];
+    // видимая полоса — [v0, v1]. Влезает — по центру полосы, нет — края поля не отходят от краёв полосы
+    const axis = (t, o, size, v0, v1) => {
+      if (size * scale <= v1 - v0) return (v0 + v1) / 2 - (o + size / 2) * scale;
+      const lo = v1 - PAN_SLACK - (o + size) * scale;
+      const hi = v0 + PAN_SLACK - o * scale;
+      return Math.min(hi, Math.max(lo, t));
     };
-    return { scale, tx: axis(view.tx, bw, cssW), ty: axis(view.ty, bh, cssH) };
+    return {
+      scale,
+      tx: axis(view.tx, box.ox, bw, 0, cssW),
+      ty: axis(view.ty, box.oy, bh, box.top, cssH - box.bottom),
+    };
   }
 
   // Пинч: масштаб относительно точки щипка — мир под серединой пальцев не уезжает
-  function pinchView(base, baseMid, baseDist, mid, dist, bw, bh, cssW, cssH) {
+  function pinchView(base, baseMid, baseDist, mid, dist, bw, bh, cssW, cssH, box) {
     const scale = Math.max(MIN_SCALE, Math.min(maxScale, base.scale * dist / Math.max(1, baseDist)));
     const w = screenToWorld(base, baseMid.x, baseMid.y);
-    return clampView({ scale, tx: mid.x - w.x * scale, ty: mid.y - w.y * scale }, bw, bh, cssW, cssH);
+    return clampView({ scale, tx: mid.x - w.x * scale, ty: mid.y - w.y * scale }, bw, bh, cssW, cssH, box);
   }
 
   // Колесо мыши: зум к курсору
-  function wheelView(view, cx, cy, deltaY, bw, bh, cssW, cssH) {
+  function wheelView(view, cx, cy, deltaY, bw, bh, cssW, cssH, box) {
     const scale = Math.max(MIN_SCALE, Math.min(maxScale, view.scale * (deltaY < 0 ? WHEEL_STEP : 1 / WHEEL_STEP)));
     const w = screenToWorld(view, cx, cy);
-    return clampView({ scale, tx: cx - w.x * scale, ty: cy - w.y * scale }, bw, bh, cssW, cssH);
+    return clampView({ scale, tx: cx - w.x * scale, ty: cy - w.y * scale }, bw, bh, cssW, cssH, box);
   }
 
   // Пан: сдвиг с клампом к границам поля
-  function panView(view, dx, dy, bw, bh, cssW, cssH) {
-    return clampView({ scale: view.scale, tx: view.tx + dx, ty: view.ty + dy }, bw, bh, cssW, cssH);
+  function panView(view, dx, dy, bw, bh, cssW, cssH, box) {
+    return clampView({ scale: view.scale, tx: view.tx + dx, ty: view.ty + dy }, bw, bh, cssW, cssH, box);
   }
 
   // Какой стрелке принадлежит мировая точка (px, py). -1 — никакой.
@@ -96,8 +114,10 @@
     };
     const worldSize = () => {
       const b = getBoard();
+      if (!b) return { bw: 0, bh: 0, box: null };
       const L = getLayout();
-      return b ? { bw: L.cell * b.w, bh: L.cell * b.h } : { bw: 0, bh: 0 };
+      const box = WG.render ? { ox: L.ox, oy: L.oy, top: WG.render.PLAY_TOP, bottom: WG.render.PLAY_BOTTOM } : null;
+      return { bw: L.cell * b.w, bh: L.cell * b.h, box };
     };
     const applyView = (v) => setView(v);
 
@@ -139,14 +159,14 @@
       if (!pointers.has(e.pointerId)) return;
       const p = rel(e);
       pointers.set(e.pointerId, p);
-      const { bw, bh } = worldSize();
+      const { bw, bh, box } = worldSize();
       const cssW = canvas.clientWidth;
       const cssH = canvas.clientHeight;
       if (gesture && gesture.type === 'pinch' && pointers.size >= 2 && pinchBase) {
         const [a, b] = [...pointers.values()];
         const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
         const dist = Math.max(1, Math.hypot(a.x - b.x, a.y - b.y));
-        applyView(pinchView(pinchBase.view, pinchBase.mid, pinchBase.dist, mid, dist, bw, bh, cssW, cssH));
+        applyView(pinchView(pinchBase.view, pinchBase.mid, pinchBase.dist, mid, dist, bw, bh, cssW, cssH, box));
       } else if (gesture && (gesture.type === 'tap-or-pan' || gesture.type === 'pan')) {
         const dx = p.x - gesture.last.x;
         const dy = p.y - gesture.last.y;
@@ -154,7 +174,7 @@
         gesture.last = p;
         if (gesture.type === 'tap-or-pan' && gesture.moved > TAP_SLOP_PX) gesture.type = 'pan';
         if (gesture.type === 'pan') {
-          applyView(panView(getView(), dx, dy, bw, bh, cssW, cssH));
+          applyView(panView(getView(), dx, dy, bw, bh, cssW, cssH, box));
         }
       }
     });
@@ -182,8 +202,8 @@
       if (!getBoard()) return;
       e.preventDefault();
       const p = rel(e);
-      const { bw, bh } = worldSize();
-      applyView(wheelView(getView(), p.x, p.y, e.deltaY, bw, bh, canvas.clientWidth, canvas.clientHeight));
+      const { bw, bh, box } = worldSize();
+      applyView(wheelView(getView(), p.x, p.y, e.deltaY, bw, bh, canvas.clientWidth, canvas.clientHeight, box));
     }, { passive: false });
   }
 
