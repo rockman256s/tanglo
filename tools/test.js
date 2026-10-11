@@ -10,7 +10,7 @@ const assert = require('assert');
 
 global.window = {};
 const SRC = path.join(__dirname, '..', 'src');
-const FILES = ['core', 'rng', 'level', 'solver', 'generator', 'shapes', 'levels', 'themes', 'anim', 'audio', 'storage', 'render', 'input'];
+const FILES = ['core', 'i18n', 'rng', 'level', 'solver', 'generator', 'shapes', 'levels', 'themes', 'anim', 'audio', 'storage', 'render', 'input'];
 for (const f of FILES) {
   vm.runInThisContext(fs.readFileSync(path.join(SRC, f + '.js'), 'utf8'), { filename: f + '.js' });
 }
@@ -21,6 +21,23 @@ const level = (w, h, arrows, extra = {}) => ({ id: 0, w, h, mask: null, arrows, 
 
 const tests = [];
 const test = (name, fn) => tests.push({ name, fn });
+
+// ---- локализация ----
+test('i18n: язык устройства → ru для ru-*, иначе en; подстановка параметров', () => {
+  assert.strictEqual(WG.i18n.detect(['ru-RU', 'en-US']), 'ru');
+  assert.strictEqual(WG.i18n.detect(['de-DE', 'ru']), 'ru');
+  assert.strictEqual(WG.i18n.detect(['de-DE', 'fr']), 'en');
+  assert.strictEqual(WG.i18n.detect([]), 'en');
+  WG.i18n.setLanguage('ru');
+  assert.strictEqual(WG.t('play', { n: 7 }), 'Уровень 7 ▶');
+  WG.i18n.setLanguage('en');
+  assert.strictEqual(WG.t('play', { n: 7 }), 'Level 7 ▶');
+  assert.strictEqual(WG.t('noCoins', { price: 60 }), 'Not enough coins: 60🪙');
+});
+
+test('i18n: словари en и ru содержат одни и те же ключи', () => {
+  assert.deepStrictEqual(Object.keys(WG.i18n.DICT.ru).sort(), Object.keys(WG.i18n.DICT.en).sort());
+});
 
 // ---- rng ----
 test('rng(42) дважды выдаёт одинаковую последовательность', () => {

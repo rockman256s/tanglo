@@ -19,7 +19,10 @@ rm -rf "$WWW"
 mkdir -p "$WWW"
 cp "$ROOT/index.html" "$ROOT/style.css" "$ROOT/icon-192.png" "$WWW/"
 cp -r "$ROOT/src" "$WWW/src"
-[ -d "$ROOT/levels" ] && cp -r "$ROOT/levels" "$WWW/levels"
+# Полный набор уровней (levels-full, не в git), если он собран; иначе — то, что лежит в репозитории
+LEVELS="$ROOT/levels"; [ -f "$ROOT/levels-full/index.js" ] && LEVELS="$ROOT/levels-full"
+cp -r "$LEVELS" "$WWW/levels"
+echo "уровни: $LEVELS"
 echo "assets: $(du -sh "$WWW" | cut -f1)"
 
 # --- тулчейн в песочнице -----------------------------------------------------

@@ -119,6 +119,10 @@
     persist();
     WG.audio.setOptions(save.settings);
     if (key === 'theme') draw();
+    if (key === 'lang') {
+      WG.i18n.setLanguage(value);
+      WG.ui.relabel();
+    }
     if (key === 'effects' && !value) {
       game.shake = 0;
       if (game.anim) game.anim.particles = [];
@@ -297,11 +301,11 @@
     if (game.hintArrowId !== null) return;
     const id = WG.solver.hint(game.board);
     if (id === null) {
-      WG.ui.toast('Подсказки нет');
+      WG.ui.toast(WG.t('noHint'));
       return;
     }
     if (!useCharge('hint')) {
-      WG.ui.toast(`Не хватает монет: ${P.hint}🪙`);
+      WG.ui.toast(WG.t('noCoins', { price: P.hint }));
       return;
     }
     game.hintArrowId = id;
@@ -318,12 +322,12 @@
       return;
     }
     if (save.boosters.scissors === 0 && save.coins < P.scissors) {
-      WG.ui.toast(`Не хватает монет: ${P.scissors}🪙`);
+      WG.ui.toast(WG.t('noCoins', { price: P.scissors }));
       return;
     }
     game.scissorsArmed = true;
     refreshBoosters();
-    WG.ui.toast('Тап по стрелке — она уберётся без потери сердечка');
+    WG.ui.toast(WG.t('scissorsHelp'));
   }
 
   // Ножницы: стрелка распадается на частицы, модель меняется без проверки луча
@@ -572,6 +576,7 @@
 
   WG.game = game; // для отладки из консоли
   WG.audio.setOptions(save.settings);
+  WG.i18n.setLanguage(save.settings.lang);
   WG.ui.init({
     onPlay: () => startLevel(save.level),
     onMap: openMap,
@@ -608,7 +613,7 @@
       if (k === 'n' || k === 'т') {
         startLevel(game.levelNumber + 1);
       } else if (k === 'l' || k === 'д') {
-        const n = Number(window.prompt('Номер уровня:', String(game.levelNumber)));
+        const n = Number(window.prompt(WG.t('levelPrompt'), String(game.levelNumber)));
         if (Number.isInteger(n) && n >= 1 && n <= 9999) startLevel(n);
       } else if (k === 't' || k === 'е') {
         setSetting('theme', save.settings.theme === 'neon' ? 'wool' : 'neon');
