@@ -17,7 +17,7 @@ T=/tmp/wazegame-ab
 WWW="$AND/app/src/main/assets/www"
 rm -rf "$WWW"
 mkdir -p "$WWW"
-cp "$ROOT/index.html" "$ROOT/style.css" "$WWW/"
+cp "$ROOT/index.html" "$ROOT/style.css" "$ROOT/icon-192.png" "$WWW/"
 cp -r "$ROOT/src" "$WWW/src"
 [ -d "$ROOT/levels" ] && cp -r "$ROOT/levels" "$WWW/levels"
 echo "assets: $(du -sh "$WWW" | cut -f1)"
