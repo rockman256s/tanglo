@@ -1,6 +1,6 @@
-# WAZE — распутай стрелки
+# Tanglo — распутай стрелки
 
-![WAZE](docs/cover.png)
+![Tanglo](docs/cover.png)
 
 Головоломка: поле плотно заполнено стрелками. Нажми на стрелку — она уезжает туда, куда смотрит,
 если на её пути до края поля нет других стрелок. Нужно убрать все. Ошибся три раза — уровень проигран.
@@ -33,7 +33,7 @@ python3 -m http.server 8000   # → http://localhost:8000
 `android/` — тонкая обёртка: полноэкранный WebView, игра лежит в assets.
 
 ```sh
-bash android/build-apk.sh        # → android/WAZE-debug.apk
+bash android/build-apk.sh        # → android/Tanglo-debug.apk
 ```
 
 Скрипт собирает офлайн и ожидает готовый тулчейн (JDK 17, Gradle 8.7, архивы Android SDK 34, кеш AGP 8.5.1)

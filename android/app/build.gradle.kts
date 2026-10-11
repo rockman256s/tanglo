@@ -3,11 +3,11 @@ plugins {
 }
 
 android {
-    namespace = "com.wazegame.app"
+    namespace = "com.rockman.tanglo"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.wazegame.app"
+        applicationId = "com.rockman.tanglo"
         minSdk = 24
         targetSdk = 34
         versionCode = 1

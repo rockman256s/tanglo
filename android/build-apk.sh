@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Сборка APK игры WAZE (WebView-обёртка). Использование: bash android/build-apk.sh
+# Сборка APK игры Tanglo (WebView-обёртка). Использование: bash android/build-apk.sh
 #
 # SDK не качаем: JDK 17, Gradle 8.7 и архивы Android SDK 34 берутся из тулчейна другого
 # проекта (переменная TOOLCHAIN), кеш зависимостей Gradle — копия в android/.build/gradle-home,
@@ -66,5 +66,5 @@ if [ $RC -ne 0 ]; then
   exit 1
 fi
 APK=$(find "$AND/app/build/outputs/apk" -name "*.apk" | head -1)
-cp "$APK" "$AND/WAZE-debug.apk"
-ls -la "$AND/WAZE-debug.apk"
+cp "$APK" "$AND/Tanglo-debug.apk"
+ls -la "$AND/Tanglo-debug.apk"

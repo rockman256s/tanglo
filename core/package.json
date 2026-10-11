@@ -1,8 +1,8 @@
 {
-  "name": "wazegame-levelgen",
+  "name": "tanglo-levelgen",
   "version": "1.0.0",
   "private": true,
-  "description": "Генератор уровней для WAZE: стрелки на сетке, обратное построение + полировка",
+  "description": "Генератор уровней для Tanglo: стрелки на сетке, обратное построение + полировка",
   "scripts": {
     "build": "node tools/build.js --from 1 --to 20000",
     "check": "node tools/check.js levels",

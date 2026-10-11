@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "WAZE"
+rootProject.name = "Tanglo"
 include(":app")

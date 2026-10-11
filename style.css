@@ -60,7 +60,7 @@ html, body {
   text-align: center;
 }
 
-.logo { margin: 0; font-size: 64px; letter-spacing: 8px; font-weight: 800; }
+.logo { margin: 0; font-size: 56px; letter-spacing: 6px; font-weight: 800; }
 .subtitle { margin: 0 0 24px; opacity: 0.7; font-size: 17px; }
 .menu-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
 

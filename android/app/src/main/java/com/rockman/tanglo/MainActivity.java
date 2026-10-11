@@ -1,4 +1,4 @@
-package com.wazegame.app;
+package com.rockman.tanglo;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;

@@ -29,7 +29,7 @@
 
     // Меню
     menuEl = h('div', 'screen menu hidden');
-    menuEl.append(h('h1', 'logo', 'WAZE'), h('p', 'subtitle', 'Распутай стрелки'));
+    menuEl.append(h('h1', 'logo', 'TANGLO'), h('p', 'subtitle', 'Распутай стрелки'));
     menuPlay = button('', 'btn-big', () => handlers.onPlay());
     const row = h('div', 'menu-row');
     row.append(
