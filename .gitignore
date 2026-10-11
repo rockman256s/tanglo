@@ -1,0 +1,13 @@
+# локальные копии и сборка
+.backup/
+node_modules/
+android/.build/
+android/app/build/
+android/.gradle/
+android/build/
+android/app/src/main/assets/www/
+*.apk
+*.log
+
+# JSON-паки генератора (для игры экспортируются в levels/*.js)
+core/levels/
