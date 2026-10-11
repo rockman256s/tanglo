@@ -240,3 +240,8 @@ html, body {
 @media (prefers-reduced-motion: reduce) {
   .lvl.current { animation: none; }
 }
+
+/* Переключатели музыки/звуков/эффектов в паузе */
+.quick-toggles { justify-content: center; gap: 12px; margin: 4px 0 0; }
+.quick-toggles .icon-btn.btn-off { opacity: 0.45; }
+.quick-toggles .icon-btn.btn-on { background: #52e3a4; color: #0b0b12; }

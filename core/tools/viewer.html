@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Просмотр уровней</title>
+  <style>
+    :root { --bg: #f6f4ef; --fg: #222; --muted: #777; --panel: #fff; --line: #ddd; }
+    @media (prefers-color-scheme: dark) { :root { --bg: #111317; --fg: #e8e8e8; --muted: #999; --panel: #1b1e24; --line: #333; } }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 system-ui, sans-serif; }
+    header { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line); }
+    header input { width: 90px; padding: 4px 6px; }
+    button { padding: 4px 10px; cursor: pointer; }
+    #info { color: var(--muted); font-size: 13px; }
+    main { display: flex; justify-content: center; padding: 16px; }
+    canvas { background: var(--panel); border-radius: 8px; max-width: 100%; touch-action: manipulation; }
+    label { display: inline-flex; gap: 4px; align-items: center; }
+  </style>
+</head>
+<body>
+  <header>
+    <button id="prev">◀</button>
+    <input id="num" type="number" min="1" value="1">
+    <button id="next">▶</button>
+    <button id="reset">Заново</button>
+    <label><input id="showFree" type="checkbox"> свободные</label>
+    <label><input id="mono" type="checkbox"> ч/б</label>
+    <span id="info"></span>
+  </header>
+  <main><canvas id="cv"></canvas></main>
+  <script src="../src/codec.js"></script>
+  <script>
+    'use strict';
+    // Палитра темы neon из игры
+    const PALETTE = ['#ff4d6d', '#ffb703', '#52e3a4', '#3ec5ff', '#a78bfa', '#ff8fab', '#f9f871', '#4ade80'];
+    const DX = { U: 0, R: 1, D: 0, L: -1 };
+    const DY = { U: -1, R: 0, D: 1, L: 0 };
+    const cv = document.getElementById('cv');
+    const ctx = cv.getContext('2d');
+    const $ = (id) => document.getElementById(id);
+    let index = null;
+    const packs = new Map();
+    let level = null;
+    let alive = null;
+    let mistakes = 0;
+    let flash = null;
+
+    const params = new URLSearchParams(location.search);
+    const base = params.get('dir') || '../levels';
+
+    async function loadPack(p) {
+      if (!packs.has(p)) {
+        const name = 'pack-' + String(p).padStart(4, '0') + '.json';
+        packs.set(p, fetch(base + '/' + name).then((r) => r.json()));
+      }
+      return packs.get(p);
+    }
+
+    async function show(n) {
+      n = Math.max(1, Math.min(index.count, n));
+      $('num').value = n;
+      try { localStorage.setItem('viewer-level', n); } catch {}
+      const p = Math.floor((n - 1) / index.packSize);
+      const pack = await loadPack(p);
+      level = WG.levelCodec.decode(pack.levels[n - pack.from], n);
+      alive = new Set(level.arrows.map((a) => a.id));
+      mistakes = 0;
+      draw();
+    }
+
+    const dirOf = (a) => {
+      const [px, py] = a.cells[a.cells.length - 2];
+      const [hx, hy] = a.cells[a.cells.length - 1];
+      return hx > px ? 'R' : hx < px ? 'L' : hy > py ? 'D' : 'U';
+    };
+
+    function owners() {
+      const o = new Int32Array(level.w * level.h).fill(-1);
+      for (const a of level.arrows) if (alive.has(a.id)) for (const [x, y] of a.cells) o[y * level.w + x] = a.id;
+      return o;
+    }
+
+    function blocker(a, o) {
+      const d = dirOf(a);
+      let [x, y] = a.cells[a.cells.length - 1];
+      for (x += DX[d], y += DY[d]; x >= 0 && y >= 0 && x < level.w && y < level.h; x += DX[d], y += DY[d]) {
+        const id = o[y * level.w + x];
+        if (id !== -1 && id !== a.id) return id;
+      }
+      return -1;
+    }
+
+    function layout() {
+      const maxW = Math.min(window.innerWidth - 32, 900);
+      const maxH = window.innerHeight - 110;
+      const P = Math.max(8, Math.floor(Math.min(maxW / (level.w + 1), maxH / (level.h + 1))));
+      return { P, M: P };
+    }
+
+    function draw() {
+      const { P, M } = layout();
+      const dpr = window.devicePixelRatio || 1;
+      cv.width = (level.w - 1) * P + 2 * M;
+      cv.height = (level.h - 1) * P + 2 * M;
+      cv.style.width = cv.width + 'px';
+      cv.style.height = cv.height + 'px';
+      cv.width *= dpr; cv.height *= dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const dark = matchMedia('(prefers-color-scheme: dark)').matches;
+      ctx.fillStyle = dark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.18)';
+      for (let y = 0; y < level.h; y++) {
+        for (let x = 0; x < level.w; x++) {
+          if (level.mask && level.mask[y][x] !== '#') continue;
+          ctx.fillRect(M + x * P - 1, M + y * P - 1, 2, 2);
+        }
+      }
+      const o = owners();
+      const mono = $('mono').checked;
+      const showFree = $('showFree').checked;
+      let free = 0;
+      for (const a of level.arrows) {
+        if (!alive.has(a.id)) continue;
+        const isFree = blocker(a, o) === -1;
+        if (isFree) free++;
+        let col = mono ? (dark ? '#eee' : '#111') : PALETTE[a.color % 8];
+        if (showFree && isFree) col = '#e0245e';
+        if (flash && flash.id === a.id) col = '#ff0000';
+        const pts = a.cells.map(([x, y]) => [M + x * P, M + y * P]);
+        ctx.strokeStyle = col;
+        ctx.fillStyle = col;
+        ctx.lineWidth = Math.max(2, P * 0.22);
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+        ctx.stroke();
+        const d = dirOf(a);
+        const [hx, hy] = pts[pts.length - 1];
+        const s = P * 0.32;
+        ctx.beginPath();
+        ctx.moveTo(hx + DX[d] * s * 1.2, hy + DY[d] * s * 1.2);
+        ctx.lineTo(hx - DX[d] * s * 0.6 - DY[d] * s, hy - DY[d] * s * 0.6 + DX[d] * s);
+        ctx.lineTo(hx - DX[d] * s * 0.6 + DY[d] * s, hy - DY[d] * s * 0.6 - DX[d] * s);
+        ctx.fill();
+      }
+      const kind = level.kind === 'picture' ? `картинка: ${level.picture.kind} / ${level.picture.name}` : 'хаос';
+      $('info').textContent = `${level.w}×${level.h} · ${kind} · осталось ${alive.size} из ${level.arrows.length} · свободно ${free} · ошибок ${mistakes}` +
+        (alive.size === 0 ? ' · ПРОЙДЕН' : '');
+    }
+
+    cv.addEventListener('click', (e) => {
+      if (!level) return;
+      const { P, M } = layout();
+      const r = cv.getBoundingClientRect();
+      const x = Math.round((e.clientX - r.left - M) / P);
+      const y = Math.round((e.clientY - r.top - M) / P);
+      if (x < 0 || y < 0 || x >= level.w || y >= level.h) return;
+      const o = owners();
+      const id = o[y * level.w + x];
+      if (id === -1) return;
+      const a = level.arrows[id];
+      if (blocker(a, o) === -1) alive.delete(id);
+      else { mistakes++; flash = { id }; setTimeout(() => { flash = null; draw(); }, 250); }
+      draw();
+    });
+
+    $('prev').onclick = () => show(+$('num').value - 1);
+    $('next').onclick = () => show(+$('num').value + 1);
+    $('reset').onclick = () => show(+$('num').value);
+    $('num').onchange = () => show(+$('num').value);
+    $('showFree').onchange = draw;
+    $('mono').onchange = draw;
+    window.addEventListener('resize', () => level && draw());
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight') show(+$('num').value + 1);
+      if (e.key === 'ArrowLeft') show(+$('num').value - 1);
+    });
+
+    fetch(base + '/index.json').then((r) => r.json()).then((ix) => {
+      index = ix;
+      let start = +params.get('level') || 1;
+      try { if (!params.get('level')) start = +localStorage.getItem('viewer-level') || 1; } catch {}
+      show(start);
+    }).catch(() => { $('info').textContent = 'Нет ' + base + '/index.json — сначала соберите уровни (npm run build)'; });
+  </script>
+</body>
+</html>

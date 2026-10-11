@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Иконка: тёмный круг и две переплетённые стрелки в цветах темы neon -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:fillColor="#0B0B12" android:pathData="M54,4a50,50 0,1 1,0 100a50,50 0,1 1,0 -100z" />
+    <path android:strokeColor="#A78BFA" android:strokeWidth="7" android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:pathData="M30,78 L30,46 L58,46 L58,30 L70,30" />
+    <path android:fillColor="#A78BFA" android:pathData="M68,22 L82,30 L68,38 Z" />
+    <path android:strokeColor="#52E3A4" android:strokeWidth="7" android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:pathData="M78,84 L78,62 L44,62 L44,38" />
+    <path android:fillColor="#52E3A4" android:pathData="M36,40 L44,26 L52,40 Z" />
+</vector>

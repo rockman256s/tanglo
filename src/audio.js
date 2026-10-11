@@ -2,12 +2,10 @@
   'use strict';
 
   // Звук синтезируется через WebAudio, без файлов (раздел 10 плана)
-  const state = { sound: true, music: true, haptics: true, theme: 'neon' };
+  const state = { sound: true, music: true, haptics: true, effects: true, theme: 'neon' };
   let ctx = null;
   let master = null;
   let noise = null;
-  let musicGain = null;
-  let musicTimer = null;
   let combo = 0;
   let lastExitAt = -Infinity;
 
@@ -135,56 +133,175 @@
     else if (SOUNDS[name]) SOUNDS[name]();
   }
 
-  // ---- музыка: тихий эмбиент-луп из четырёх аккордов ----
+  // ---- музыка: спокойный lo-fi, синтез без файлов ----
+  //
+  // Джазовый круг ii–V–I–vi (Dm9 – G13 – Cmaj9 – Am9), 70 BPM, один аккорд на такт.
+  // Электропиано (мягкая атака, долгое затухание) играет аккорд на 1 и на «и» второй доли,
+  // бас — корень на 1 и 3, мелодия — редкие ноты пентатоники с эхом. Нотная лента
+  // планируется на ~0.3 с вперёд по часам AudioContext (без дрожания таймеров).
 
-  const CHORDS = [
-    [261.63, 329.63, 392.0], // C
-    [220.0, 261.63, 329.63], // Am
-    [174.61, 220.0, 261.63], // F
-    [196.0, 246.94, 293.66], // G
+  const BPM = 70;
+  const BEAT = 60 / BPM;
+  const midi = (m) => 440 * Math.pow(2, (m - 69) / 12);
+  const PROGRESSION = [
+    { bass: 38, keys: [53, 57, 60, 64] }, // Dm9:   F A C E над D
+    { bass: 43, keys: [53, 57, 59, 64] }, // G13:   F A B E над G
+    { bass: 36, keys: [52, 55, 59, 62] }, // Cmaj9: E G B D над C
+    { bass: 45, keys: [55, 59, 60, 64] }, // Am9:   G B C E над A
   ];
+  const MELODY = [69, 72, 74, 76, 79, 81]; // пентатоника C/Am
 
-  function playChord(chord) {
-    const t0 = ctx.currentTime;
-    for (const f of chord) {
+  let music = null; // { bus, timer, nextTime, step, last }
+
+  function musicBus() {
+    // Шина: мягкий фильтр + эхо → master
+    const bus = ctx.createGain();
+    bus.gain.value = 0.0001;
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 2200;
+    lp.Q.value = 0.3;
+    const delay = ctx.createDelay(1);
+    delay.delayTime.value = BEAT * 0.75;
+    const fb = ctx.createGain();
+    fb.gain.value = 0.32;
+    const wet = ctx.createGain();
+    wet.gain.value = 0.28;
+    const echoIn = ctx.createGain();
+    echoIn.connect(delay);
+    delay.connect(fb);
+    fb.connect(delay);
+    delay.connect(wet);
+    wet.connect(lp);
+    bus.connect(lp);
+    lp.connect(master);
+    return { bus, echoIn };
+  }
+
+  // Электропиано: синус + тихий треугольник октавой выше, экспоненциальное затухание
+  function keyNote(m, t, dur, vol) {
+    const f = midi(m);
+    for (const [type, mul, v] of [['sine', 1, 1], ['triangle', 2, 0.18]]) {
       const osc = ctx.createOscillator();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(f, t0);
+      osc.type = type;
+      osc.frequency.setValueAtTime(f * mul, t);
+      osc.detune.setValueAtTime((Math.random() - 0.5) * 6, t);
       const g = ctx.createGain();
-      g.gain.setValueAtTime(0.0001, t0);
-      g.gain.linearRampToValueAtTime(0.5, t0 + 0.4);
-      g.gain.linearRampToValueAtTime(0.0001, t0 + 1.9);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(vol * v, t + 0.025);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
       osc.connect(g);
-      g.connect(musicGain);
-      osc.start(t0);
-      osc.stop(t0 + 2);
+      g.connect(music.bus);
+      osc.start(t);
+      osc.stop(t + dur + 0.05);
+    }
+  }
+
+  function bassNote(m, t, dur) {
+    const osc = ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(midi(m), t);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.5, t + 0.04);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(g);
+    g.connect(music.bus);
+    osc.start(t);
+    osc.stop(t + dur + 0.05);
+  }
+
+  // Колокольчик мелодии: синус с лёгким вибрато, часть сигнала уходит в эхо
+  function bellNote(m, t, vol) {
+    const osc = ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(midi(m), t);
+    const lfo = ctx.createOscillator();
+    lfo.frequency.value = 5;
+    const lfoG = ctx.createGain();
+    lfoG.gain.value = 2.5;
+    lfo.connect(lfoG);
+    lfoG.connect(osc.frequency);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(vol, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 1.4);
+    osc.connect(g);
+    g.connect(music.bus);
+    g.connect(music.echoIn);
+    osc.start(t);
+    lfo.start(t);
+    osc.stop(t + 1.5);
+    lfo.stop(t + 1.5);
+  }
+
+  // Одна восьмая: step считает восьмые с начала, 8 восьмых = такт
+  function scheduleStep(step, t) {
+    const bar = Math.floor(step / 8) % PROGRESSION.length;
+    const e = step % 8;
+    const chord = PROGRESSION[bar];
+    if (e === 0) {
+      chord.keys.forEach((m, i) => keyNote(m, t + i * 0.012, BEAT * 3.2, 0.11));
+      bassNote(chord.bass, t, BEAT * 1.8);
+    }
+    if (e === 3) chord.keys.forEach((m, i) => keyNote(m, t + i * 0.01, BEAT * 2, 0.07));
+    if (e === 4) bassNote(chord.bass + 12 * (Math.random() < 0.3 ? 1 : 0), t, BEAT * 1.4);
+    // Мелодия: редкие ноты, чаще на сильных восьмых, без резких скачков
+    const p = e % 2 === 0 ? 0.32 : 0.14;
+    if (Math.random() < p) {
+      const prev = music.last;
+      let k = prev === null ? 2 : prev + Math.round((Math.random() - 0.5) * 3);
+      k = Math.max(0, Math.min(MELODY.length - 1, k));
+      music.last = k;
+      bellNote(MELODY[k], t + (e % 2 ? 0.03 : 0), 0.09);
     }
   }
 
   function startMusic() {
     // Запуск только в running-контексте: если контекст ещё не создан (не было жеста)
-    // или suspended, аккорды копились бы на замороженном currentTime и разом сыграли
+    // или suspended, ноты копились бы на замороженном currentTime и разом сыграли
     // при первом тапе. Создание контекста — дело onFirstGesture (план §10).
-    if (!ctx || ctx.state !== 'running' || musicTimer || !state.music) return;
-    if (!musicGain) {
-      const lp = ctx.createBiquadFilter();
-      lp.type = 'lowpass';
-      lp.frequency.value = 800;
-      musicGain = ctx.createGain();
-      musicGain.gain.value = 0.05;
-      musicGain.connect(lp);
-      lp.connect(master);
+    if (!ctx || ctx.state !== 'running' || !state.music) return;
+    if (!music) {
+      music = { ...musicBus(), timer: null, nextTime: 0, step: 0, last: null };
     }
-    let i = 0;
-    playChord(CHORDS[i++ % CHORDS.length]);
-    musicTimer = setInterval(() => {
-      playChord(CHORDS[i++ % CHORDS.length]);
-    }, 2000);
+    if (music.timer) return;
+    const now = ctx.currentTime;
+    music.bus.gain.cancelScheduledValues(now);
+    music.bus.gain.setValueAtTime(Math.max(0.0001, music.bus.gain.value), now);
+    music.bus.gain.linearRampToValueAtTime(0.55, now + 1.5); // плавное появление
+    music.nextTime = now + 0.1;
+    music.timer = setInterval(() => {
+      const ahead = ctx.currentTime + 0.3;
+      while (music.nextTime < ahead) {
+        scheduleStep(music.step++, music.nextTime);
+        music.nextTime += BEAT / 2;
+      }
+    }, 100);
   }
 
   function stopMusic() {
-    if (musicTimer) clearInterval(musicTimer);
-    musicTimer = null;
+    if (!music || !music.timer) return;
+    clearInterval(music.timer);
+    music.timer = null;
+    // Уже запланированные ноты гасим плавным уводом громкости шины
+    const now = ctx.currentTime;
+    music.bus.gain.cancelScheduledValues(now);
+    music.bus.gain.setValueAtTime(Math.max(0.0001, music.bus.gain.value), now);
+    music.bus.gain.linearRampToValueAtTime(0.0001, now + 0.4);
+  }
+
+  // Приложение свёрнуто — замолкаем полностью; вернулось — продолжаем
+  function suspend() {
+    stopMusic();
+    if (ctx && ctx.state === 'running') ctx.suspend();
+  }
+
+  function resume() {
+    if (!ctx) return;
+    const go = () => { if (state.music) startMusic(); };
+    if (ctx.state === 'suspended') ctx.resume().then(go, () => {});
+    else go();
   }
 
   // Вибрация — только если включено и поддерживается (iOS Safari без navigator.vibrate — тихо пропускаем)
@@ -214,6 +331,7 @@
   if (typeof document !== 'undefined') {
     document.addEventListener('pointerdown', onFirstGesture, { once: true, capture: true });
     document.addEventListener('keydown', onFirstGesture, { once: true, capture: true });
+    document.addEventListener('visibilitychange', () => (document.hidden ? suspend() : resume()));
 
     // Клик по любой кнопке — короткий «поп»
     document.addEventListener('click', (e) => {
@@ -221,6 +339,6 @@
     }, true);
   }
 
-  WG.audio = { setOptions, play, exitSound, vibrate, nextCombo, state };
+  WG.audio = { setOptions, play, exitSound, vibrate, nextCombo, suspend, resume, state };
 
 })(window.WG = window.WG || {});

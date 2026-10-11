@@ -37,6 +37,13 @@
     view.ty = 0;
   }
 
+  // Предел зума: при полном увеличении клетка ≈ 44 CSS-px (размер пальца), но не меньше 2.5×
+  const FINGER_PX = 44;
+  function updateZoomLimit() {
+    if (!game.board || !game.cssW) return;
+    WG.input.setMaxScale(Math.max(2.5, Math.min(8, FINGER_PX / layout().cell)));
+  }
+
   function persist() {
     WG.storage.save(save);
   }
@@ -112,8 +119,17 @@
     persist();
     WG.audio.setOptions(save.settings);
     if (key === 'theme') draw();
-    WG.ui.showSettings(save.settings, { hasProgress: true });
+    if (key === 'effects' && !value) {
+      game.shake = 0;
+      if (game.anim) game.anim.particles = [];
+    }
+    // Из паузы — обновляем карточку паузы, из экрана настроек — экран настроек
+    if (game.screen === 'game' && game.state === 'paused') WG.ui.showPause(save.settings);
+    else WG.ui.showSettings(save.settings, { hasProgress: true });
   }
+
+  // Визуальные эффекты (тряска, конфетти, искры) можно выключить в настройках
+  const fx = () => save.settings.effects !== false;
 
   function resetProgress() {
     WG.storage.reset();
@@ -127,11 +143,30 @@
   // ---- уровень ----
 
   function startLevel(n) {
-    const info = WG.generator.makeLevelInfo(n);
+    // Готовые уровни из паков; пак грузится асинхронно — тогда стартуем, когда он придёт.
+    // Если пак не загрузился или уровня нет в паках — процедурный генератор игры
+    const packs = WG.levelPacks;
+    if (packs && packs.covers(n) && !packs.ready(n)) {
+      packs.load(n).then(() => startLevel(n), () => startLevelInfo(n, WG.generator.makeLevelInfo(n)));
+      return;
+    }
+    const level = packs && packs.get(n);
+    startLevelInfo(n, level ? { level } : WG.generator.makeLevelInfo(n));
+    if (packs && packs.covers(n + 1)) packs.load(n + 1).catch(() => {}); // заранее — следующий пак
+  }
+
+  let debugTitle = false;
+
+  function startLevelInfo(n, info) {
+    if (debugTitle) {
+      const src = WG.levelPacks && WG.levelPacks.ready(n) ? 'pack' : 'gen';
+      document.title = 'L' + n + ' arrows=' + info.level.arrows.length + ' w=' + info.level.w + ' h=' + info.level.h + ' src=' + src;
+    }
     game.levelNumber = n;
     game.boss = !!info.level.boss;
     game.board = new WG.level.Board(info.level);
-    resetView(); // новый уровень — вид сброшен (IMP B5)
+    resetView();
+    updateZoomLimit(); // новый уровень — вид сброшен (IMP B5)
     game.screen = 'game';
     game.state = 'playing';
     game.hearts = WG.MAX_HEARTS;
@@ -163,7 +198,7 @@
   function pause() {
     if (game.state !== 'playing' || game.screen !== 'game') return;
     game.state = 'paused';
-    WG.ui.showPause();
+    WG.ui.showPause(save.settings);
   }
 
   function resume() {
@@ -251,7 +286,7 @@
       game.anim.tween(blocker, 'flash', 0, 0.6);
     }
 
-    game.shake = 0.25;
+    if (fx()) game.shake = 0.25;
     if (game.hearts === 0) game.anim.after(0.7, lose);
   }
 
@@ -321,7 +356,7 @@
     game.anim.tween(ghost.vis, 'scale', 0.4, 0.4, { ease: 'easeOutQuad' });
 
     const pal = theme().palette;
-    for (const [x, y] of geo.cells) {
+    if (fx()) for (const [x, y] of geo.cells) {
       for (let k = 0; k < 3; k++) {
         game.anim.emit({
           x,
@@ -395,6 +430,7 @@
 
   // Конфетти 80 штук, «волна» от центра по пустым клеткам
   function confetti() {
+    if (!fx()) return;
     const pal = theme().palette;
     const cx = (game.board.w - 1) / 2;
     const cy = (game.board.h - 1) / 2;
@@ -458,6 +494,12 @@
     }
     const L = layout();
     ctx.save();
+    // При зуме поле не залезает под HUD и панель бустеров
+    if (view.scale > 1) {
+      ctx.beginPath();
+      ctx.rect(0, WG.render.PLAY_TOP, game.cssW, game.cssH - WG.render.PLAY_TOP - WG.render.PLAY_BOTTOM);
+      ctx.clip();
+    }
     if (game.shake > 0) {
       const a = 4 * (game.shake / 0.25);
       ctx.translate((Math.random() - 0.5) * 2 * a, (Math.random() - 0.5) * 2 * a);
@@ -482,6 +524,7 @@
     canvas.height = Math.round(game.cssH * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     // Вид клампится к новым границам (IMP B5)
+    updateZoomLimit();
     if (game.board) {
       const L = layout();
       Object.assign(view, WG.input.clampView(
@@ -499,7 +542,7 @@
     last = now;
     if (game.state !== 'paused') {
       game.anim.update(dt);
-      for (const g of game.ghosts) emitTrail(g, dt);
+      if (fx()) for (const g of game.ghosts) emitTrail(g, dt);
     }
     game.shake = Math.max(0, game.shake - dt);
     if (game.hintArrowId !== null) {
@@ -510,6 +553,21 @@
   }
 
   // ---- запуск ----
+
+  // Системная кнопка «Назад» (Android-обёртка): true — обработали, false — можно выходить
+  WG.back = function () {
+    if (game.screen === 'game') {
+      if (game.state === 'playing') pause();
+      else if (game.state === 'paused') { WG.ui.hideOverlay(); resume(); }
+      else toMenu();
+      return true;
+    }
+    if (game.screen === 'map' || game.screen === 'settings') {
+      showMenu();
+      return true;
+    }
+    return false;
+  };
 
   WG.game = game; // для отладки из консоли
   WG.audio.setOptions(save.settings);
@@ -559,10 +617,10 @@
 
   const debugJump = Number(debugQuery.get('level'));
   if (debugQuery.get('debug') === '1' && Number.isInteger(debugJump) && debugJump >= 1 && debugJump <= 9999) {
+    // Диагностика headless-скриншотов: факт в title (попадает в --dump-dom).
+    // Уровень из пака стартует асинхронно — title пишет startLevelInfo
+    debugTitle = true;
     startLevel(debugJump);
-    // Диагностика headless-скриншотов: факт в title (попадает в --dump-dom)
-    const lvlInfo = WG.generator.makeLevelInfo(debugJump).level;
-    document.title = 'L' + debugJump + ' arrows=' + game.board.alive.size + ' w=' + lvlInfo.w + ' h=' + lvlInfo.h;
   } else {
     showMenu();
   }

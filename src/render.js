@@ -328,6 +328,8 @@
   }
 
   WG.render = {
+    PLAY_TOP: TOP,
+    PLAY_BOTTOM: BOTTOM,
     layout,
     center,
     subPolyline,

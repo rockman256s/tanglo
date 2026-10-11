@@ -9,7 +9,7 @@
       stars: {},
       coins: 0,
       boosters: { hint: 3, scissors: 1 },
-      settings: { sound: true, music: true, haptics: true, theme: 'neon' },
+      settings: { sound: true, music: true, haptics: true, effects: true, theme: 'neon' },
     };
   }
 
@@ -30,6 +30,7 @@
         sound: typeof (data.settings && data.settings.sound) === 'boolean' ? data.settings.sound : d.settings.sound,
         music: typeof (data.settings && data.settings.music) === 'boolean' ? data.settings.music : d.settings.music,
         haptics: typeof (data.settings && data.settings.haptics) === 'boolean' ? data.settings.haptics : d.settings.haptics,
+        effects: typeof (data.settings && data.settings.effects) === 'boolean' ? data.settings.effects : d.settings.effects,
         theme: data.settings && (data.settings.theme === 'neon' || data.settings.theme === 'wool')
           ? data.settings.theme : d.settings.theme,
       },

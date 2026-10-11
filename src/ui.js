@@ -154,8 +154,21 @@
     ]);
   }
 
-  function showPause() {
-    showCard('Пауза', [], [
+  // Быстрые переключатели в паузе: карточка не закрывается, кнопка сразу показывает новое состояние
+  function quickToggles(settings) {
+    const row = h('div', 'menu-row quick-toggles');
+    for (const [key, on, off] of [['music', '🎵', '🎵'], ['sound', '🔊', '🔇'], ['effects', '✨', '✨']]) {
+      const b = button(settings[key] ? on : off, 'icon-btn ' + (settings[key] ? 'btn-on' : 'btn-off'), () => {
+        handlers.onSetting(key, !settings[key]);
+      });
+      b.title = { music: 'Музыка', sound: 'Звуки', effects: 'Эффекты' }[key];
+      row.append(b);
+    }
+    return row;
+  }
+
+  function showPause(settings) {
+    showCard('Пауза', settings ? [quickToggles(settings)] : [], [
       { label: 'Продолжить', cls: 'btn-big', onClick: handlers.onResume },
       { label: 'Заново', cls: 'btn-ghost', onClick: handlers.onRetry },
       { label: 'В меню', cls: 'btn-ghost', onClick: handlers.onMenu },
@@ -204,8 +217,9 @@
         handlers.onSetting(key, !on);
       }));
     };
-    toggle('Звук', 'sound');
     toggle('Музыка', 'music');
+    toggle('Звуки', 'sound');
+    toggle('Эффекты', 'effects');
     toggle('Вибрация', 'haptics');
 
     const themeRow = h('div', 'menu-row');

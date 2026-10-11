@@ -6,7 +6,13 @@
   const TAP_MAX_MS = 500;      // удержание дольше — не тап
   const DOUBLE_TAP_MS = 300;   // окно двойного тапа
   const MIN_SCALE = 1;         // меньше «вписанного» не нужно
-  const MAX_SCALE = 2.5;       // предел увеличения плотных полей
+  const MAX_SCALE = 2.5;       // предел увеличения по умолчанию
+  // Для больших полей предел поднимает игра (setMaxScale): при полном зуме клетка должна быть
+  // не меньше пальца, иначе на поле 30×50 по стрелкам не попасть
+  let maxScale = MAX_SCALE;
+  function setMaxScale(v) {
+    maxScale = Math.max(MIN_SCALE, v);
+  }
   const WHEEL_STEP = 1.15;     // шаг колеса мыши
 
   // ---- чистая view-математика (юнит-тесты в tools/test.js) ----
@@ -20,7 +26,7 @@
   // Вид не даёт полю (bw×bh мировых px) вылезти за канвас; если поле влезает — вид нейтрален
   // (layout уже центрирует поле, пановать в запас смысла нет)
   function clampView(view, bw, bh, cssW, cssH) {
-    const scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, view.scale));
+    const scale = Math.max(MIN_SCALE, Math.min(maxScale, view.scale));
     const axis = (t, size, screen) => {
       if (size * scale <= screen) return 0;
       return Math.min(0, Math.max(screen - size * scale, t));
@@ -30,14 +36,14 @@
 
   // Пинч: масштаб относительно точки щипка — мир под серединой пальцев не уезжает
   function pinchView(base, baseMid, baseDist, mid, dist, bw, bh, cssW, cssH) {
-    const scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, base.scale * dist / Math.max(1, baseDist)));
+    const scale = Math.max(MIN_SCALE, Math.min(maxScale, base.scale * dist / Math.max(1, baseDist)));
     const w = screenToWorld(base, baseMid.x, baseMid.y);
     return clampView({ scale, tx: mid.x - w.x * scale, ty: mid.y - w.y * scale }, bw, bh, cssW, cssH);
   }
 
   // Колесо мыши: зум к курсору
   function wheelView(view, cx, cy, deltaY, bw, bh, cssW, cssH) {
-    const scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, view.scale * (deltaY < 0 ? WHEEL_STEP : 1 / WHEEL_STEP)));
+    const scale = Math.max(MIN_SCALE, Math.min(maxScale, view.scale * (deltaY < 0 ? WHEEL_STEP : 1 / WHEEL_STEP)));
     const w = screenToWorld(view, cx, cy);
     return clampView({ scale, tx: cx - w.x * scale, ty: cy - w.y * scale }, bw, bh, cssW, cssH);
   }
@@ -186,6 +192,7 @@
     attach,
     screenToWorld,
     clampView,
+    setMaxScale,
     pinchView,
     wheelView,
     panView,
