@@ -8,7 +8,7 @@
 Tanglo: Arrow Puzzle
 
 **Short description** (до 80 символов)
-Untangle a maze of arrows. Tap one to slide it out — but only if its path is clear.
+Untangle a maze of arrows. Tap one to slide it out — if its path is clear.
 
 **Full description** (до 4000 символов)
 Tanglo is a calm, tricky puzzle about untangling arrows.
@@ -27,7 +27,7 @@ The board is packed with long, twisting arrows. Tap an arrow and it slides off t
 ## Русский
 
 **Название**
-Tanglo: головоломка со стрелками
+Tanglo: головоломка стрелок
 
 **Краткое описание**
 Распутай лабиринт стрелок. Тапни — стрелка уедет, если путь свободен.
