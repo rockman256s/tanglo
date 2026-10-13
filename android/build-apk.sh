@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
-# Сборка APK игры Tanglo (WebView-обёртка). Использование: bash android/build-apk.sh
+# Сборка игры Tanglo (WebView-обёртка):
+#   bash android/build-apk.sh                 — отладочный APK → android/Tanglo-debug.apk
+#   bash android/build-apk.sh bundleRelease   — AAB для Google Play → android/Tanglo-release.aab
+#                                               (подпись — ключ из android/make-upload-key.sh)
 #
-# SDK не качаем: JDK 17, Gradle 8.7 и архивы Android SDK 34 берутся из тулчейна другого
+# JDK 17, Gradle 8.7 и архивы Android SDK 34 берутся из тулчейна другого
 # проекта (переменная TOOLCHAIN), кеш зависимостей Gradle — копия в android/.build/gradle-home,
 # сборка идёт офлайн. Рабочая песочница — в /tmp (в пути тулчейна есть пробел, а скрипты
 # sdkmanager/gradle его не переваривают).
@@ -44,6 +47,13 @@ if [ ! -x "$T/jdk/bin/java" ] || [ ! -x "$T/gradle/bin/gradle" ] || [ ! -d "$T/s
   mkdir -p "$T/sdk/licenses"
   printf '\n8933bad161af4178b1185d1a37fbf41ea5269c55\nd56f5187479451eabf01fb78af6dfcb131a6481e\n24333f8a63b6825ea9c5514f83c2829b004d1fee\n' > "$T/sdk/licenses/android-sdk-license"
 fi
+# Play требует targetSdk 36: платформу 36 докачивает sdkmanager (один раз, ~100 МБ)
+if [ ! -d "$T/sdk/platforms/android-36" ] || [ ! -d "$T/sdk/build-tools/36.0.0" ]; then
+  echo "== Android SDK 36 =="
+  [ -d "$T/cmdline-tools" ] || cp -a "$TOOLCHAIN/cmdline-tools-latest" "$T/cmdline-tools"
+  yes | JAVA_HOME="$T/jdk" "$T/cmdline-tools/bin/sdkmanager" --sdk_root="$T/sdk" \
+    "platforms;android-36" "build-tools;36.0.0" > /dev/null
+fi
 
 if [ ! -d "$B/gradle-home/caches/modules-2" ]; then
   echo "== кеш зависимостей Gradle =="
@@ -62,7 +72,7 @@ printf 'sdk.dir=%s\n' "$T/sdk" > "$AND/local.properties"
 # --- сборка ------------------------------------------------------------------
 echo "== assembleDebug =="
 # APK пересобирается с нуля: инкрементальная упаковка оставляет в файле место от удалённых ассетов
-rm -rf "$AND/app/build/outputs" "$AND/app/build/intermediates/apk"
+rm -rf "$AND/app/build/outputs" "$AND/app/build/intermediates/apk" "$AND/app/build/intermediates/bundle"
 set +e
 "$T/gradle/bin/gradle" -p "$AND" --offline --no-daemon -Duser.home="$HOME" "${@:-assembleDebug}" > "$B/build.log" 2>&1
 RC=$?
@@ -72,6 +82,13 @@ if [ $RC -ne 0 ]; then
   grep -E "error:|What went wrong" -A8 "$B/build.log" | head -40
   echo "(полный лог: android/.build/build.log)"
   exit 1
+fi
+if [ "${1:-}" = bundleRelease ]; then
+  AAB="$AND/app/build/outputs/bundle/release/app-release.aab"
+  "$T/jdk/bin/jarsigner" -verify "$AAB" > /dev/null 2>&1 || { echo "AAB не подписан: сначала android/make-upload-key.sh"; exit 1; }
+  cp "$AAB" "$AND/Tanglo-release.aab"
+  ls -la "$AND/Tanglo-release.aab"
+  exit 0
 fi
 APK=$(find "$AND/app/build/outputs/apk" -name "*.apk" | head -1)
 cp "$APK" "$AND/Tanglo-debug.apk"
