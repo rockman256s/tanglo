@@ -1,0 +1,72 @@
+<!doctype html><html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600;800&family=Manrope:wght@500;700&display=block" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0}
+html,body{width:1080px;height:1920px;overflow:hidden;background:#07070f}
+.p{position:relative;width:1080px;height:1920px;overflow:hidden;
+ background:radial-gradient(900px 700px at 15% 8%,var(--g1),transparent 70%),radial-gradient(900px 800px at 95% 95%,var(--g2),transparent 70%),linear-gradient(170deg,#0d0b1f,#05050b)}
+.deco{position:absolute;inset:0}
+.veil{position:absolute;left:0;right:0;top:0;height:760px;background:radial-gradient(700px 420px at 50% 52%,rgba(6,6,14,.92),rgba(6,6,14,.55) 60%,transparent 100%)}
+h1{position:absolute;top:120px;left:70px;right:70px;font:800 var(--hs,100px)/1.05 Unbounded,sans-serif;letter-spacing:-2px;color:#fff;text-align:center;text-transform:uppercase}
+h1 span{background:linear-gradient(90deg,var(--a),var(--b));-webkit-background-clip:text;color:transparent;filter:drop-shadow(0 0 30px color-mix(in srgb,var(--a) 50%,transparent))}
+p.s{position:absolute;top:var(--st);left:90px;right:90px;font:600 50px/1.25 Manrope,sans-serif;color:#c9c6e6;text-align:center}
+.phone{position:absolute;left:50%;top:var(--pt);width:640px;height:1138px;transform:translateX(-50%) rotate(var(--rot));border-radius:72px;padding:18px;
+ background:linear-gradient(145deg,#2c2a44,#121120);box-shadow:0 0 0 3px #3b3860,0 60px 140px rgba(0,0,0,.7),0 0 120px color-mix(in srgb,var(--a) 35%,transparent)}
+.phone img{width:100%;height:100%;object-fit:cover;object-position:top;border-radius:56px;display:block}
+.badge{position:absolute;font:800 44px Unbounded,sans-serif;color:#0b0b12;background:linear-gradient(90deg,var(--a),var(--b));padding:22px 40px;border-radius:999px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+</style></head><body>
+<div class="p" id="p"><svg class="deco" id="deco" width="1080" height="1920"></svg>
+<div class="veil"></div><h1 id="h"></h1><p class="s" id="s"></p><div class="phone"><img id="img"></div><div class="badge" id="badge" style="display:none"></div></div>
+<script>
+const q=new URLSearchParams(location.search), i=+q.get('i'), lang=q.get('lang')||'en';
+const C=['#ff4d6d','#ffb703','#52e3a4','#3ec5ff','#a78bfa','#ff8fab','#f9f871'];
+const P=[
+ {img:'l12.png',a:'#ffb703',b:'#ff4d6d',g1:'#5b1e4e',g2:'#3a2a07',rot:'-4deg',
+  en:['Untangle<br><span>the arrows</span>','Tap an arrow — it slides out<br>if its path is clear'],
+  ru:['Распутай<br><span>стрелки</span>','Тапни по стрелке — она уедет,<br>если путь свободен']},
+ {img:'l150.png',a:'#3ec5ff',b:'#a78bfa',g1:'#0e3557',g2:'#33215e',rot:'3deg',badge:['1000 levels','1000 уровней'],
+  en:['Easy to<br><span>mind-bending</span>','Every level is guaranteed solvable'],
+  ru:['От лёгких<br><span>до безумных</span>','Каждый уровень гарантированно решаем']},
+ {img:'l40.png',a:'#f9f871',b:'#52e3a4',g1:'#3f3b0a',g2:'#0b4031',rot:'-3deg',
+  en:['Hidden<br><span>pictures</span>','Every 10th level the arrows<br>draw a secret shape'],
+  ru:['Скрытые<br><span>картинки</span>','Каждый 10-й уровень стрелки<br>складываются в фигуру']},
+ {img:'hard-game.png',a:'#3ec5ff',b:'#52e3a4',g1:'#06364d',g2:'#063a2c',rot:'4deg',badge:['Hard mode','Хард-режим'],
+  en:['One colour.<br><span>Pure logic.</span>','No colour hints — only you<br>and the maze'],
+  ru:['Один цвет.<br><span>Чистая логика.</span>','Никаких подсказок цветом —<br>только ты и лабиринт']},
+ {img:'l30.png',a:'#ff8fab',b:'#ffb703',g1:'#4f1430',g2:'#4a2f05',rot:'-3deg',
+  en:['Relax<br><span>&amp; think</span>','Calm music · zoom & pan<br>Offline · no account'],
+  ru:['Расслабься<br><span>и думай</span>','Спокойная музыка · зум<br>Без интернета и аккаунта']},
+][i];
+const r=document.documentElement.style;
+for(const k of ['a','b','g1','g2']) document.getElementById('p').style.setProperty('--'+k,P[k]);
+const [h,s]=P[lang]; document.getElementById('h').innerHTML=h; document.getElementById('s').innerHTML=s;
+const two=document.getElementById('h');
+document.getElementById('p').style.setProperty('--rot',P.rot);
+document.getElementById('img').src=(lang==='ru'?'ru-':'')+P.img;
+// Декор: светящиеся стрелки-ломаные по краям, за телефоном
+let seed=i*977+13; const rnd=()=>((seed=(seed*16807)%2147483647)/2147483647);
+const svg=document.getElementById('deco'); let html='<defs><filter id="gl" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="9" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>';
+const U=60;
+for(let n=0;n<22;n++){
+  const side=n%2; let x=side? 1080-U*(1+Math.floor(rnd()*3)) : U*(1+Math.floor(rnd()*3)); let y=U*Math.floor(4+rnd()*29);
+  const pts=[[x,y]]; let d=Math.floor(rnd()*4);
+  const len=2+Math.floor(rnd()*4);
+  for(let k=0;k<len;k++){ const L=U*(1+Math.floor(rnd()*3)); const D=[[0,-1],[1,0],[0,1],[-1,0]][d]; x+=D[0]*L; y+=D[1]*L; pts.push([x,y]); d=(d+(rnd()<.5?1:3))%4; }
+  const col=C[Math.floor(rnd()*C.length)], [x1,y1]=pts[pts.length-2],[x2,y2]=pts[pts.length-1];
+  const dx=Math.sign(x2-x1),dy=Math.sign(y2-y1),px=-dy,py=dx, hl=26,hw=20;
+  const op=(0.35+rnd()*0.4).toFixed(2);
+  html+=`<g opacity="${op}" filter="url(#gl)"><polyline points="${pts.map(p=>p.join(',')).join(' ')}" fill="none" stroke="${col}" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/><polygon points="${x2+dx*hl},${y2+dy*hl} ${x2+px*hw},${y2+py*hw} ${x2-px*hw},${y2-py*hw}" fill="${col}"/><circle cx="${pts[0][0]}" cy="${pts[0][1]}" r="9" fill="${col}"/></g>`;
+}
+svg.innerHTML=html;
+document.fonts.ready.then(()=>{
+  const p=document.getElementById('p'), sEl=document.getElementById('s');
+  // заголовок не шире панели: уменьшаем кегль, пока строки влезают
+  let hs=104; p.style.setProperty('--hs',hs+'px');
+  while(two.scrollWidth>two.clientWidth+2 && hs>60){hs-=4;p.style.setProperty('--hs',hs+'px');}
+  for(const sp of two.querySelectorAll('span')) while(sp.offsetWidth>940 && hs>60){hs-=4;p.style.setProperty('--hs',hs+'px');}
+  const st=120+two.offsetHeight+36; p.style.setProperty('--st',st+'px');
+  const pt=st+sEl.offsetHeight+80; p.style.setProperty('--pt',pt+'px');
+  if(P.badge){const b=document.getElementById('badge'); b.textContent=P.badge[lang==='ru'?1:0]; b.style.display='block'; b.style.right='60px'; b.style.top=(pt-40)+'px'; b.style.transform='rotate(6deg)';}
+  document.title='ready';
+});
+</script></body></html>
