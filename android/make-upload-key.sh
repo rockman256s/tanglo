@@ -6,6 +6,7 @@ set -euo pipefail
 D="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/.build/release"
 KT=/tmp/wazegame-ab/jdk/bin/keytool
 [ -x "$KT" ] || { echo "нет JDK: сначала bash android/build-apk.sh"; exit 1; }
+[ -t 0 ] || { echo "нужен обычный терминал: скрипт спрашивает пароль с клавиатуры"; exit 1; }
 mkdir -p "$D"
 [ -f "$D/upload.jks" ] && { echo "ключ уже есть: $D/upload.jks"; exit 1; }
 read -rsp "Пароль для ключа (от 8 символов): " PW; echo
