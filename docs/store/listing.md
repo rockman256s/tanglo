@@ -15,7 +15,7 @@ Tanglo is a calm, tricky puzzle about untangling arrows.
 
 The board is packed with long, twisting arrows. Tap an arrow and it slides off the board in the direction it points — but only if nothing stands in its way. Pick the wrong one and it bumps into another arrow and you lose a heart. Find the right order and clear the whole board.
 
-• 1000 handcrafted-feeling levels, from a gentle start to dense, confusing mazes
+• 1000 levels, from a gentle start to dense, confusing mazes
 • Every level is guaranteed solvable — there is always a way out
 • Bonus picture levels every 10 levels: hidden shapes drawn by the arrows
 • Pinch to zoom and pan on big boards
