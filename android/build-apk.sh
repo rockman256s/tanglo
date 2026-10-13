@@ -19,8 +19,11 @@ rm -rf "$WWW"
 mkdir -p "$WWW"
 cp "$ROOT/index.html" "$ROOT/style.css" "$ROOT/icon-192.png" "$WWW/"
 cp -r "$ROOT/src" "$WWW/src"
-# Полный набор уровней (levels-full, не в git), если он собран; иначе — то, что лежит в репозитории
-LEVELS="$ROOT/levels"; [ -f "$ROOT/levels-full/index.js" ] && LEVELS="$ROOT/levels-full"
+# Набор уровней: LEVELS=levels (1000 из репозитория) или LEVELS=levels-full; по умолчанию —
+# полный набор (не в git), если он собран, иначе тот, что лежит в репозитории
+if [ -n "$LEVELS" ]; then LEVELS="$ROOT/$LEVELS"
+else LEVELS="$ROOT/levels"; [ -f "$ROOT/levels-full/index.js" ] && LEVELS="$ROOT/levels-full"; fi
+[ -f "$LEVELS/index.js" ] || { echo "нет уровней: $LEVELS/index.js"; exit 1; }
 cp -r "$LEVELS" "$WWW/levels"
 echo "уровни: $LEVELS"
 echo "assets: $(du -sh "$WWW" | cut -f1)"
@@ -58,6 +61,8 @@ printf 'sdk.dir=%s\n' "$T/sdk" > "$AND/local.properties"
 
 # --- сборка ------------------------------------------------------------------
 echo "== assembleDebug =="
+# APK пересобирается с нуля: инкрементальная упаковка оставляет в файле место от удалённых ассетов
+rm -rf "$AND/app/build/outputs" "$AND/app/build/intermediates/apk"
 set +e
 "$T/gradle/bin/gradle" -p "$AND" --offline --no-daemon -Duser.home="$HOME" "${@:-assembleDebug}" > "$B/build.log" 2>&1
 RC=$?
