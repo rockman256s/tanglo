@@ -228,6 +228,22 @@
       }));
     };
     toggle(t('music'), 'music');
+    const styleRow = h('div', 'menu-row');
+    for (const [name, label] of [['lofi', 'Lo-fi'], ['ambient', 'Ambient']]) {
+      styleRow.append(button(label, settings.musicStyle === name ? 'btn-on' : 'btn-off', () => {
+        handlers.onSetting('musicStyle', name);
+      }));
+    }
+    list.append(h('p', 'settings-label', t('musicStyle')), styleRow);
+    if (settings.musicStyle === 'lofi') {
+      const stationRow = h('div', 'menu-row');
+      for (const name of ['chill', 'night', 'cafe', 'tape']) {
+        stationRow.append(button(t('station_' + name), settings.musicStation === name ? 'btn-on' : 'btn-off', () => {
+          handlers.onSetting('musicStation', name);
+        }));
+      }
+      list.append(h('p', 'settings-label', t('station')), stationRow);
+    }
     toggle(t('sound'), 'sound');
     toggle(t('effects'), 'effects');
     toggle(t('haptics'), 'haptics');

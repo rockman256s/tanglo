@@ -9,7 +9,7 @@
       stars: {},
       coins: 50,
       boosters: { hint: 3, scissors: 1 },
-      settings: { sound: true, music: true, haptics: true, effects: true, hard: false, theme: 'neon', lang: 'auto' },
+      settings: { sound: true, music: true, musicStyle: 'lofi', musicStation: 'chill', haptics: true, effects: true, hard: false, theme: 'neon', lang: 'auto' },
     };
   }
 
@@ -29,6 +29,10 @@
       settings: {
         sound: typeof (data.settings && data.settings.sound) === 'boolean' ? data.settings.sound : d.settings.sound,
         music: typeof (data.settings && data.settings.music) === 'boolean' ? data.settings.music : d.settings.music,
+        musicStyle: data.settings && ['lofi', 'ambient'].includes(data.settings.musicStyle)
+          ? data.settings.musicStyle : d.settings.musicStyle,
+        musicStation: data.settings && ['chill', 'night', 'cafe', 'tape'].includes(data.settings.musicStation)
+          ? data.settings.musicStation : d.settings.musicStation,
         haptics: typeof (data.settings && data.settings.haptics) === 'boolean' ? data.settings.haptics : d.settings.haptics,
         effects: typeof (data.settings && data.settings.effects) === 'boolean' ? data.settings.effects : d.settings.effects,
         hard: typeof (data.settings && data.settings.hard) === 'boolean' ? data.settings.hard : d.settings.hard,

@@ -10,7 +10,7 @@ const assert = require('assert');
 
 global.window = {};
 const SRC = path.join(__dirname, '..', 'src');
-const FILES = ['core', 'i18n', 'rng', 'level', 'solver', 'generator', 'shapes', 'levels', 'themes', 'anim', 'audio', 'storage', 'render', 'input'];
+const FILES = ['core', 'i18n', 'rng', 'level', 'solver', 'generator', 'shapes', 'levels', 'themes', 'anim', 'lofi', 'audio', 'storage', 'render', 'input'];
 for (const f of FILES) {
   vm.runInThisContext(fs.readFileSync(path.join(SRC, f + '.js'), 'utf8'), { filename: f + '.js' });
 }
@@ -591,6 +591,62 @@ test('серия ходов: тон растёт при ходах < 1.2 с др
   for (let i = 0; i < 10; i++) step(11 + i * 0.5);
   assert.strictEqual(c, 7);            // потолок
   assert.strictEqual(step(30), 0);     // пауза сбрасывает
+});
+
+test('lo-fi: песня детерминирована сидом, следующая — на кварту выше и другая', () => {
+  const a = WG.lofi.song(3, 42);
+  assert.deepStrictEqual(WG.lofi.song(3, 42), a);
+  const b = WG.lofi.song(4, 42);
+  assert.strictEqual(b.key, (a.key + 5) % 12);
+  assert.notDeepStrictEqual(b.bars.map((x) => x.events), a.bars.map((x) => x.events));
+  assert.notDeepStrictEqual(WG.lofi.song(3, 43).bars.map((x) => x.events), a.bars.map((x) => x.events));
+});
+
+test('lo-fi: станции — у каждой свой состав, песни валидны и детерминированы', () => {
+  const ids = Object.keys(WG.lofi.STATIONS);
+  assert.deepStrictEqual(ids, ['chill', 'night', 'cafe', 'tape']);
+  const DRUMS = ['kick', 'snare', 'hat', 'ohat'];
+  for (const id of ids) {
+    for (let n = 0; n < 4; n++) {
+      const song = WG.lofi.song(n, 555, id);
+      assert.deepStrictEqual(WG.lofi.song(n, 555, id), song);
+      const all = song.bars.flatMap((bar) => bar.events);
+      for (const e of all) assert.ok(e.s >= 0 && e.s < WG.lofi.STEPS && e.v > 0 && e.v <= 1, `${id}: ${JSON.stringify(e)}`);
+      for (const bar of song.bars) assert.ok(bar.events.some((e) => e.inst === 'keys'), `${id}: такт без аккорда`);
+      if (id === 'tape') assert.ok(!all.some((e) => DRUMS.includes(e.inst)), 'tape без барабанов');
+      if (id === 'night' && n % 2) assert.ok(!all.some((e) => e.inst === 'lead'), 'night: мелодия через песню');
+    }
+  }
+  // Неизвестная станция — как станция по умолчанию
+  assert.deepStrictEqual(WG.lofi.song(1, 9, 'nope'), WG.lofi.song(1, 9, WG.lofi.DEFAULT_STATION));
+});
+
+test('lo-fi: события в сетке, ноты в своих регистрах, мелодия в пентатонике тональности', () => {
+  const INST = ['kick', 'snare', 'hat', 'ohat', 'keys', 'bass', 'lead'];
+  for (let seed = 1; seed <= 20; seed++) {
+    for (let n = 0; n < 6; n++) {
+      const song = WG.lofi.song(n, seed * 977);
+      assert.strictEqual(song.bars.length, WG.lofi.BARS);
+      song.bars.forEach((bar, b) => {
+        for (const e of bar.events) {
+          assert.ok(INST.includes(e.inst), e.inst);
+          assert.ok(Number.isInteger(e.s) && e.s >= 0 && e.s < WG.lofi.STEPS, `s=${e.s}`);
+          assert.ok(e.v > 0 && e.v <= 1, `v=${e.v}`);
+          if (e.len !== undefined) assert.ok(e.len >= 1, `len=${e.len}`);
+          if (e.inst === 'bass') assert.ok(e.m >= 32 && e.m <= 51, `bass ${e.m}`);
+          if (e.inst === 'keys') for (const m of e.notes) assert.ok(m >= 55 && m < 67, `keys ${m}`);
+          if (e.inst === 'lead') {
+            assert.ok(e.m >= 67 && e.m <= 83, `lead ${e.m}`);
+            assert.ok(WG.lofi.PENTA.includes((e.m - song.key + 120) % 12), `lead ${e.m} вне лада`);
+          }
+        }
+        // У каждого такта есть гармония; в полном такте бочка на первую долю
+        assert.ok(bar.events.some((e) => e.inst === 'keys'), `такт ${b} без аккорда`);
+        const full = !(n === 0 && b < 4);
+        assert.strictEqual(bar.events.some((e) => e.inst === 'kick' && e.s === 0), full, `бочка, такт ${b}`);
+      });
+    }
+  }
 });
 
 // ---- раннер ----

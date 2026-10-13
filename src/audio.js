@@ -2,7 +2,7 @@
   'use strict';
 
   // Звук синтезируется через WebAudio, без файлов (раздел 10 плана)
-  const state = { sound: true, music: true, haptics: true, effects: true, theme: 'neon' };
+  const state = { sound: true, music: true, musicStyle: 'lofi', musicStation: 'chill', haptics: true, effects: true, theme: 'neon' };
   let ctx = null;
   let master = null;
   let noise = null;
@@ -133,7 +133,7 @@
     else if (SOUNDS[name]) SOUNDS[name]();
   }
 
-  // ---- музыка: спокойный эмбиент, синтез без файлов ----
+  // ---- музыка: два стиля — lo-fi (src/lofi.js) и спокойный эмбиент ниже, синтез без файлов ----
   //
   // Восьмитактовый круг в до мажоре (Fmaj7 – C/E – Am7 – Gsus4 – Fmaj7 – Em7 – Dm7 – G), 72 BPM.
   // Тёплый пэд, мягкое FM-электропиано (арпеджио и сочинённая мелодия), бас, общий ревербератор.
@@ -164,7 +164,7 @@
     [48, 69, 3], [51, 72, 1], [52, 74, 4], [56, 71, 4], [60, 67, 4],
   ];
 
-  let music = null; // живая музыка: { ac, out, dry, rev, timer, nextTime, step }
+  let music = null; // живая музыка: движок стиля + { style, timer, nextTime, step }
 
   // Ревербератор: стерео-импульс из затухающего шума
   function makeReverb(ac, seconds) {
@@ -313,13 +313,24 @@
     }
   }
 
+  // Стиль вместе со станцией lo-fi: смена любого из них пересоздаёт движок
+  const styleKey = () => (state.musicStyle === 'lofi' ? 'lofi:' + state.musicStation : state.musicStyle);
+
+  // Движок стиля: { out, stepDur, vol, schedule(step, t), dispose(t) }
+  function createEngine(style, ac, dest) {
+    const [name, st] = style.split(':');
+    if (name === 'lofi' && WG.lofi) return WG.lofi.createEngine(ac, dest, Math.floor(Math.random() * 2 ** 31), st);
+    const mu = createMusic(ac, dest);
+    return { ...mu, stepDur: EIGHTH, vol: MUSIC_VOL, schedule: (step, t) => scheduleStep(mu, step, t), dispose() {} };
+  }
+
   // Оффлайн-рендер для проверки (громкость, пики): play/test не используют
-  function renderMusic(seconds, sampleRate = 44100) {
+  function renderMusic(seconds, sampleRate = 44100, style = styleKey()) {
     const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
     const ac = new OAC(2, Math.ceil(seconds * sampleRate), sampleRate);
-    const mu = createMusic(ac, ac.destination);
-    mu.out.gain.value = MUSIC_VOL;
-    for (let step = 0, t = 0.05; t < seconds - 0.5; step++, t += EIGHTH) scheduleStep(mu, step, t);
+    const en = createEngine(style, ac, ac.destination);
+    en.out.gain.value = en.vol;
+    for (let step = 0, t = 0.05; t < seconds - 0.5; step++, t += en.stepDur) en.schedule(step, t);
     return ac.startRendering();
   }
 
@@ -328,18 +339,22 @@
     // или suspended, ноты копились бы на замороженном currentTime и разом сыграли
     // при первом тапе. Создание контекста — дело onFirstGesture (план §10).
     if (!ctx || ctx.state !== 'running' || !state.music) return;
-    if (!music) music = { ...createMusic(ctx, master), timer: null, nextTime: 0, step: 0 };
+    if (music && music.style !== styleKey()) dropMusic();
+    if (!music) {
+      const style = styleKey();
+      music = { ...createEngine(style, ctx, master), style, timer: null, nextTime: 0, step: 0 };
+    }
     if (music.timer) return;
     const now = ctx.currentTime;
     music.out.gain.cancelScheduledValues(now);
     music.out.gain.setValueAtTime(Math.max(0.0001, music.out.gain.value), now);
-    music.out.gain.linearRampToValueAtTime(MUSIC_VOL, now + 2.5); // плавное появление
+    music.out.gain.linearRampToValueAtTime(music.vol, now + 2.5); // плавное появление
     music.nextTime = now + 0.1;
     music.timer = setInterval(() => {
       const ahead = ctx.currentTime + 0.3;
       while (music.nextTime < ahead) {
-        scheduleStep(music, music.step++, music.nextTime);
-        music.nextTime += EIGHTH;
+        music.schedule(music.step++, music.nextTime);
+        music.nextTime += music.stepDur;
       }
     }, 100);
   }
@@ -353,6 +368,16 @@
     music.out.gain.cancelScheduledValues(now);
     music.out.gain.setValueAtTime(Math.max(0.0001, music.out.gain.value), now);
     music.out.gain.linearRampToValueAtTime(0.0001, now + 0.6);
+  }
+
+  // Смена стиля: старый движок затихает и освобождается, новый создаётся при следующем старте
+  function dropMusic() {
+    if (!music) return;
+    stopMusic();
+    const old = music;
+    music = null;
+    old.dispose(ctx.currentTime + 0.7);
+    setTimeout(() => old.out.disconnect(), 1500);
   }
 
   // Приложение свёрнуто — замолкаем полностью; вернулось — продолжаем
@@ -381,6 +406,7 @@
   // Настройки из save.settings
   function setOptions(opts) {
     Object.assign(state, opts);
+    if (music && music.style !== styleKey()) dropMusic();
     if (state.music) startMusic();
     else stopMusic();
   }
