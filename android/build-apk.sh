@@ -70,7 +70,7 @@ export GRADLE_USER_HOME="$B/gradle-home"
 printf 'sdk.dir=%s\n' "$T/sdk" > "$AND/local.properties"
 
 # --- сборка ------------------------------------------------------------------
-echo "== assembleDebug =="
+echo "== ${1:-assembleDebug} =="
 # APK пересобирается с нуля: инкрементальная упаковка оставляет в файле место от удалённых ассетов
 rm -rf "$AND/app/build/outputs" "$AND/app/build/intermediates/apk" "$AND/app/build/intermediates/bundle"
 set +e
