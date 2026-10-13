@@ -106,7 +106,7 @@
   }
 
   // Экономика (раздел 9.2–9.3 плана)
-  const PRICES = { hint: 60, scissors: 150, continue: 100 };
+  const PRICES = { hint: 60, scissors: 150, continue: 20 };
 
   // Звёзды: 0 ошибок — 3, 1 — 2, иначе 1
   function starsFor(mistakes) {

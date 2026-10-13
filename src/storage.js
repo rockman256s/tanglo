@@ -7,7 +7,7 @@
     return {
       level: 1,
       stars: {},
-      coins: 0,
+      coins: 50,
       boosters: { hint: 3, scissors: 1 },
       settings: { sound: true, music: true, haptics: true, effects: true, theme: 'neon', lang: 'auto' },
     };

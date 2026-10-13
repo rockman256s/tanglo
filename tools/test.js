@@ -224,7 +224,7 @@ test('полная генерация (ремонт + добивка + поез�
 });
 
 // ---- зум/пан (IMP B5): чистая view-математика ----
-test('clampView с box: при зуме видны оба края смещённого поля, пустоты за краем нет', () => {
+test('clampView с box: при зуме видны оба края смещённого поля, за краем — четверть экрана запаса', () => {
   WG.input.setMaxScale(6);
   try {
   // поле 300×500 мировых px, лежит с отступом (20, 100); видимая полоса по вертикали — [90, 557]
@@ -234,12 +234,14 @@ test('clampView с box: при зуме видны оба края смещён�
   const s = 4;
   // тянем максимально вниз-вправо: левый/верхний край поля прижат к краю полосы
   const a = WG.input.clampView({ scale: s, tx: 1e6, ty: 1e6 }, 300, 500, W, H, box);
-  assert.ok(Math.abs(20 * s + a.tx - 12) < 1e-9, 'левый край поля у левого края экрана');
-  assert.ok(Math.abs(100 * s + a.ty - (90 + 12)) < 1e-9, 'верх поля под HUD');
+  const sx = W * 0.25;
+  const sy = (H - 90 - 110) * 0.25;
+  assert.ok(Math.abs(20 * s + a.tx - sx) < 1e-9, 'левый край поля у левого края экрана');
+  assert.ok(Math.abs(100 * s + a.ty - (90 + sy)) < 1e-9, 'верх поля под HUD');
   // тянем вверх-влево: правый/нижний край поля доступен
   const b = WG.input.clampView({ scale: s, tx: -1e6, ty: -1e6 }, 300, 500, W, H, box);
-  assert.ok(Math.abs(320 * s + b.tx - (W - 12)) < 1e-9, 'правый край поля достижим');
-  assert.ok(Math.abs(600 * s + b.ty - (H - 110 - 12)) < 1e-9, 'низ поля над бустерами');
+  assert.ok(Math.abs(320 * s + b.tx - (W - sx)) < 1e-9, 'правый край поля достижим');
+  assert.ok(Math.abs(600 * s + b.ty - (H - 110 - sy)) < 1e-9, 'низ поля над бустерами');
   // масштаб 1: вид нейтрален — layout уже поставил поле (300×447) по центру полосы [90, 557]
   const c = WG.input.clampView({ scale: 1, tx: 50, ty: 50 }, 300, 447, W, H, box);
   assert.ok(Math.abs(c.tx) < 1e-9 && Math.abs(c.ty) < 1e-9);
@@ -550,7 +552,7 @@ test('storage: частичное сохранение дополняется д
   });
   const s = WG.storage.load();
   assert.strictEqual(s.level, 12);
-  assert.strictEqual(s.coins, 0);
+  assert.strictEqual(s.coins, 50); // мусор → стартовые монеты
   assert.strictEqual(s.settings.theme, 'wool');
   assert.strictEqual(s.settings.sound, true);
   assert.deepStrictEqual(s.boosters, { hint: 3, scissors: 1 });

@@ -27,7 +27,10 @@
   // (layout уже центрирует поле, пановать в запас смысла нет).
   // box (необязательно) — где поле лежит в мире и какая часть экрана для него видна:
   // { ox, oy, top, bottom } — без него поле считается начинающимся в (0, 0) на весь экран
-  const PAN_SLACK = 12; // чуть-чуть «воздуха» у края поля при прокрутке
+  // «Воздух» за краем поля при прокрутке в зуме: край можно увести на четверть экрана внутрь,
+  // чтобы крайние стрелки и их лучи не прятались у самой рамки
+  const PAN_SLACK_FRAC = 0.25;
+  const panSlack = (band) => Math.max(12, band * PAN_SLACK_FRAC);
   function clampView(view, bw, bh, cssW, cssH, box) {
     const scale = Math.max(MIN_SCALE, Math.min(maxScale, view.scale));
     if (!box) {
@@ -41,8 +44,8 @@
     // видимая полоса — [v0, v1]. Влезает — по центру полосы, нет — края поля не отходят от краёв полосы
     const axis = (t, o, size, v0, v1) => {
       if (size * scale <= v1 - v0) return (v0 + v1) / 2 - (o + size / 2) * scale;
-      const lo = v1 - PAN_SLACK - (o + size) * scale;
-      const hi = v0 + PAN_SLACK - o * scale;
+      const lo = v1 - panSlack(v1 - v0) - (o + size) * scale;
+      const hi = v0 + panSlack(v1 - v0) - o * scale;
       return Math.min(hi, Math.max(lo, t));
     };
     return {
