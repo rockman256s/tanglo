@@ -5,9 +5,9 @@
   const PAD = 16;       // отступ поля от краёв
   const TOP = 90;       // высота HUD сверху
   const BOTTOM = 110;   // высота панели бустеров снизу
-  // Толщина тела стрелки в долях клетки (IMP B2, референс ~0.3)
-  const BODY_LW = { neon: 0.3, wool: 0.32 };
-  const lwOf = (theme, cell) => cell * (BODY_LW[theme.style] || 0.3);
+  // Толщина тела стрелки в долях клетки (референс ~0.3, тоньше на 15% — акцент на наконечнике)
+  const BODY_LW = { neon: 0.255, wool: 0.272 };
+  const lwOf = (theme, cell) => cell * (BODY_LW[theme.style] || 0.255);
 
   // Поле вписывается в область между HUD и панелью бустеров; сохраняем {ox, oy, cell} для ввода
   function layout(cssW, cssH, w, h) {

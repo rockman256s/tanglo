@@ -133,128 +133,194 @@
     else if (SOUNDS[name]) SOUNDS[name]();
   }
 
-  // ---- музыка: спокойный lo-fi, синтез без файлов ----
+  // ---- музыка: спокойный эмбиент, синтез без файлов ----
   //
-  // Джазовый круг ii–V–I–vi (Dm9 – G13 – Cmaj9 – Am9), 70 BPM, один аккорд на такт.
-  // Электропиано (мягкая атака, долгое затухание) играет аккорд на 1 и на «и» второй доли,
-  // бас — корень на 1 и 3, мелодия — редкие ноты пентатоники с эхом. Нотная лента
-  // планируется на ~0.3 с вперёд по часам AudioContext (без дрожания таймеров).
+  // Восьмитактовый круг в до мажоре (Fmaj7 – C/E – Am7 – Gsus4 – Fmaj7 – Em7 – Dm7 – G), 72 BPM.
+  // Тёплый пэд, мягкое FM-электропиано (арпеджио и сочинённая мелодия), бас, общий ревербератор.
+  // Четыре части по 8 тактов: вступление → мелодия → мелодия октавой выше → «вдох» без баса.
+  // Ноты планируются на ~0.3 с вперёд по часам AudioContext (без дрожания таймеров).
 
-  const BPM = 70;
+  const BPM = 72;
   const BEAT = 60 / BPM;
+  const EIGHTH = BEAT / 2;
+  const MUSIC_VOL = 1.2; // громкость шины музыки: пик ≈0.35 до master, тише звуков ходов
   const midi = (m) => 440 * Math.pow(2, (m - 69) / 12);
-  const PROGRESSION = [
-    { bass: 38, keys: [53, 57, 60, 64] }, // Dm9:   F A C E над D
-    { bass: 43, keys: [53, 57, 59, 64] }, // G13:   F A B E над G
-    { bass: 36, keys: [52, 55, 59, 62] }, // Cmaj9: E G B D над C
-    { bass: 45, keys: [55, 59, 60, 64] }, // Am9:   G B C E над A
+  const CHORDS = [
+    { bass: 41, pad: [57, 60, 64, 67], arp: [65, 69, 72, 76] }, // Fmaj7
+    { bass: 40, pad: [55, 60, 64, 67], arp: [64, 67, 72, 74] }, // C/E
+    { bass: 45, pad: [57, 60, 64, 67], arp: [64, 69, 72, 76] }, // Am7
+    { bass: 43, pad: [55, 60, 62, 67], arp: [62, 67, 72, 74] }, // Gsus4
+    { bass: 41, pad: [57, 60, 64, 67], arp: [65, 69, 72, 76] }, // Fmaj7
+    { bass: 40, pad: [55, 59, 62, 64], arp: [64, 67, 71, 74] }, // Em7
+    { bass: 38, pad: [57, 60, 62, 65], arp: [62, 65, 69, 72] }, // Dm7
+    { bass: 43, pad: [55, 59, 62, 67], arp: [62, 67, 71, 74] }, // G
   ];
-  const MELODY = [69, 72, 74, 76, 79, 81]; // пентатоника C/Am
+  const ARP = [0, 1, 2, 3, 1, 2, 3, 2]; // порядок нот арпеджио по восьмым такта
+  // Мелодия на 8 тактов: [восьмая от начала круга, нота, длительность в восьмых]
+  const MELODY = [
+    [0, 76, 3], [3, 74, 1], [4, 72, 4], [8, 67, 4], [12, 72, 2], [14, 74, 2],
+    [16, 76, 6], [22, 79, 2], [24, 74, 8],
+    [32, 77, 2], [34, 76, 2], [36, 72, 4], [40, 71, 2], [42, 72, 2], [44, 67, 4],
+    [48, 69, 3], [51, 72, 1], [52, 74, 4], [56, 71, 4], [60, 67, 4],
+  ];
 
-  let music = null; // { bus, timer, nextTime, step, last }
+  let music = null; // живая музыка: { ac, out, dry, rev, timer, nextTime, step }
 
-  function musicBus() {
-    // Шина: мягкий фильтр + эхо → master
-    const bus = ctx.createGain();
-    bus.gain.value = 0.0001;
-    const lp = ctx.createBiquadFilter();
-    lp.type = 'lowpass';
-    lp.frequency.value = 2200;
-    lp.Q.value = 0.3;
-    const delay = ctx.createDelay(1);
-    delay.delayTime.value = BEAT * 0.75;
-    const fb = ctx.createGain();
-    fb.gain.value = 0.32;
-    const wet = ctx.createGain();
-    wet.gain.value = 0.28;
-    const echoIn = ctx.createGain();
-    echoIn.connect(delay);
-    delay.connect(fb);
-    fb.connect(delay);
-    delay.connect(wet);
-    wet.connect(lp);
-    bus.connect(lp);
-    lp.connect(master);
-    return { bus, echoIn };
+  // Ревербератор: стерео-импульс из затухающего шума
+  function makeReverb(ac, seconds) {
+    const len = Math.floor(ac.sampleRate * seconds);
+    const ir = ac.createBuffer(2, len, ac.sampleRate);
+    for (let ch = 0; ch < 2; ch++) {
+      const d = ir.getChannelData(ch);
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3);
+    }
+    const conv = ac.createConvolver();
+    conv.buffer = ir;
+    return conv;
   }
 
-  // Электропиано: синус + тихий треугольник октавой выше, экспоненциальное затухание
-  function keyNote(m, t, dur, vol) {
+  // Шины музыки: dry и rev (вход ревербератора) → out (громкость/плавное появление) → dest
+  function createMusic(ac, dest) {
+    const out = ac.createGain();
+    out.gain.value = 0.0001;
+    const lp = ac.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 5500;
+    const dry = ac.createGain();
+    dry.gain.value = 0.8;
+    const rev = ac.createGain();
+    const conv = makeReverb(ac, 3.2);
+    const wet = ac.createGain();
+    wet.gain.value = 0.5;
+    dry.connect(lp);
+    rev.connect(conv);
+    conv.connect(wet);
+    wet.connect(lp);
+    lp.connect(out);
+    out.connect(dest);
+    return { ac, out, dry, rev };
+  }
+
+  // Электропиано: FM-синус (модулятор 1:1, яркость гаснет быстрее громкости)
+  function epNote(mu, m, t, dur, vol, send) {
+    const { ac } = mu;
     const f = midi(m);
-    for (const [type, mul, v] of [['sine', 1, 1], ['triangle', 2, 0.18]]) {
-      const osc = ctx.createOscillator();
+    const car = ac.createOscillator();
+    car.frequency.setValueAtTime(f, t);
+    const mod = ac.createOscillator();
+    mod.frequency.setValueAtTime(f, t);
+    const idx = ac.createGain();
+    idx.gain.setValueAtTime(f * 1.1, t);
+    idx.gain.exponentialRampToValueAtTime(f * 0.05, t + 0.9);
+    mod.connect(idx);
+    idx.connect(car.frequency);
+    const g = ac.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(vol, t + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    car.connect(g);
+    g.connect(mu.dry);
+    const s = ac.createGain();
+    s.gain.value = send;
+    g.connect(s);
+    s.connect(mu.rev);
+    car.start(t);
+    mod.start(t);
+    car.stop(t + dur + 0.05);
+    mod.stop(t + dur + 0.05);
+  }
+
+  // Пэд: по две слегка расстроенные пилы на ноту через тёмный фильтр, медленная атака
+  function padChord(mu, notes, t, dur) {
+    const { ac } = mu;
+    const lp = ac.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 650;
+    lp.Q.value = 0.4;
+    const g = ac.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.022, t + 1.6);
+    g.gain.setValueAtTime(0.022, t + dur - 0.4);
+    g.gain.linearRampToValueAtTime(0.0001, t + dur + 1.8);
+    lp.connect(g);
+    g.connect(mu.dry);
+    const s = ac.createGain();
+    s.gain.value = 0.9;
+    g.connect(s);
+    s.connect(mu.rev);
+    for (const m of notes) {
+      for (const cents of [-7, 7]) {
+        const osc = ac.createOscillator();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(midi(m), t);
+        osc.detune.setValueAtTime(cents, t);
+        osc.connect(lp);
+        osc.start(t);
+        osc.stop(t + dur + 1.9);
+      }
+    }
+  }
+
+  // Бас: синус с тихим треугольником, срезанный сверху
+  function bassNote(mu, m, t, dur) {
+    const { ac } = mu;
+    const lp = ac.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 320;
+    const g = ac.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.06, t + 0.05);
+    g.gain.exponentialRampToValueAtTime(0.03, t + dur * 0.6);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    lp.connect(g);
+    g.connect(mu.dry);
+    for (const [type, v] of [['sine', 1], ['triangle', 0.35]]) {
+      const osc = ac.createOscillator();
       osc.type = type;
-      osc.frequency.setValueAtTime(f * mul, t);
-      osc.detune.setValueAtTime((Math.random() - 0.5) * 6, t);
-      const g = ctx.createGain();
-      g.gain.setValueAtTime(0.0001, t);
-      g.gain.linearRampToValueAtTime(vol * v, t + 0.025);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-      osc.connect(g);
-      g.connect(music.bus);
+      osc.frequency.setValueAtTime(midi(m), t);
+      const og = ac.createGain();
+      og.gain.value = v;
+      osc.connect(og);
+      og.connect(lp);
       osc.start(t);
       osc.stop(t + dur + 0.05);
     }
   }
 
-  function bassNote(m, t, dur) {
-    const osc = ctx.createOscillator();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(midi(m), t);
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.linearRampToValueAtTime(0.5, t + 0.04);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    osc.connect(g);
-    g.connect(music.bus);
-    osc.start(t);
-    osc.stop(t + dur + 0.05);
-  }
-
-  // Колокольчик мелодии: синус с лёгким вибрато, часть сигнала уходит в эхо
-  function bellNote(m, t, vol) {
-    const osc = ctx.createOscillator();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(midi(m), t);
-    const lfo = ctx.createOscillator();
-    lfo.frequency.value = 5;
-    const lfoG = ctx.createGain();
-    lfoG.gain.value = 2.5;
-    lfo.connect(lfoG);
-    lfoG.connect(osc.frequency);
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.linearRampToValueAtTime(vol, t + 0.01);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 1.4);
-    osc.connect(g);
-    g.connect(music.bus);
-    g.connect(music.echoIn);
-    osc.start(t);
-    lfo.start(t);
-    osc.stop(t + 1.5);
-    lfo.stop(t + 1.5);
-  }
-
-  // Одна восьмая: step считает восьмые с начала, 8 восьмых = такт
-  function scheduleStep(step, t) {
-    const bar = Math.floor(step / 8) % PROGRESSION.length;
+  // Одна восьмая. step — номер восьмой с начала; 8 восьмых = такт, 64 = круг, 4 круга = цикл
+  function scheduleStep(mu, step, t) {
     const e = step % 8;
-    const chord = PROGRESSION[bar];
+    const bar = Math.floor(step / 8) % CHORDS.length;
+    const part = Math.floor(step / 64) % 4;
+    const chord = CHORDS[bar];
+    const human = () => Math.random() * 0.012;
     if (e === 0) {
-      chord.keys.forEach((m, i) => keyNote(m, t + i * 0.012, BEAT * 3.2, 0.11));
-      bassNote(chord.bass, t, BEAT * 1.8);
+      padChord(mu, chord.pad, t, BEAT * 4);
+      if (part !== 3) bassNote(mu, chord.bass, t + 0.01, BEAT * 3.6);
     }
-    if (e === 3) chord.keys.forEach((m, i) => keyNote(m, t + i * 0.01, BEAT * 2, 0.07));
-    if (e === 4) bassNote(chord.bass + 12 * (Math.random() < 0.3 ? 1 : 0), t, BEAT * 1.4);
-    // Мелодия: редкие ноты, чаще на сильных восьмых, без резких скачков
-    const p = e % 2 === 0 ? 0.32 : 0.14;
-    if (Math.random() < p) {
-      const prev = music.last;
-      let k = prev === null ? 2 : prev + Math.round((Math.random() - 0.5) * 3);
-      k = Math.max(0, Math.min(MELODY.length - 1, k));
-      music.last = k;
-      bellNote(MELODY[k], t + (e % 2 ? 0.03 : 0), 0.09);
+    // Арпеджио: в 1-й и 4-й частях — четвертями, в остальных — восьмыми
+    if (part === 1 || part === 2 || e % 2 === 0) {
+      const v = (e === 0 ? 0.11 : 0.075) * (0.85 + Math.random() * 0.3);
+      epNote(mu, chord.arp[ARP[e]], t + human(), 1.8, v, 0.35);
     }
+    if (part === 1 || part === 2) {
+      const pos = step % 64;
+      for (const [at, m, len] of MELODY) {
+        if (at !== pos) continue;
+        const up = part === 2 ? 12 : 0;
+        epNote(mu, m + up, t + human(), Math.max(1.6, len * EIGHTH * 1.6), part === 2 ? 0.12 : 0.17, 0.55);
+      }
+    }
+  }
+
+  // Оффлайн-рендер для проверки (громкость, пики): play/test не используют
+  function renderMusic(seconds, sampleRate = 44100) {
+    const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    const ac = new OAC(2, Math.ceil(seconds * sampleRate), sampleRate);
+    const mu = createMusic(ac, ac.destination);
+    mu.out.gain.value = MUSIC_VOL;
+    for (let step = 0, t = 0.05; t < seconds - 0.5; step++, t += EIGHTH) scheduleStep(mu, step, t);
+    return ac.startRendering();
   }
 
   function startMusic() {
@@ -262,20 +328,18 @@
     // или suspended, ноты копились бы на замороженном currentTime и разом сыграли
     // при первом тапе. Создание контекста — дело onFirstGesture (план §10).
     if (!ctx || ctx.state !== 'running' || !state.music) return;
-    if (!music) {
-      music = { ...musicBus(), timer: null, nextTime: 0, step: 0, last: null };
-    }
+    if (!music) music = { ...createMusic(ctx, master), timer: null, nextTime: 0, step: 0 };
     if (music.timer) return;
     const now = ctx.currentTime;
-    music.bus.gain.cancelScheduledValues(now);
-    music.bus.gain.setValueAtTime(Math.max(0.0001, music.bus.gain.value), now);
-    music.bus.gain.linearRampToValueAtTime(0.55, now + 1.5); // плавное появление
+    music.out.gain.cancelScheduledValues(now);
+    music.out.gain.setValueAtTime(Math.max(0.0001, music.out.gain.value), now);
+    music.out.gain.linearRampToValueAtTime(MUSIC_VOL, now + 2.5); // плавное появление
     music.nextTime = now + 0.1;
     music.timer = setInterval(() => {
       const ahead = ctx.currentTime + 0.3;
       while (music.nextTime < ahead) {
-        scheduleStep(music.step++, music.nextTime);
-        music.nextTime += BEAT / 2;
+        scheduleStep(music, music.step++, music.nextTime);
+        music.nextTime += EIGHTH;
       }
     }, 100);
   }
@@ -286,9 +350,9 @@
     music.timer = null;
     // Уже запланированные ноты гасим плавным уводом громкости шины
     const now = ctx.currentTime;
-    music.bus.gain.cancelScheduledValues(now);
-    music.bus.gain.setValueAtTime(Math.max(0.0001, music.bus.gain.value), now);
-    music.bus.gain.linearRampToValueAtTime(0.0001, now + 0.4);
+    music.out.gain.cancelScheduledValues(now);
+    music.out.gain.setValueAtTime(Math.max(0.0001, music.out.gain.value), now);
+    music.out.gain.linearRampToValueAtTime(0.0001, now + 0.6);
   }
 
   // Приложение свёрнуто — замолкаем полностью; вернулось — продолжаем
@@ -339,6 +403,6 @@
     }, true);
   }
 
-  WG.audio = { setOptions, play, exitSound, vibrate, nextCombo, suspend, resume, state };
+  WG.audio = { setOptions, play, exitSound, vibrate, nextCombo, suspend, resume, renderMusic, state };
 
 })(window.WG = window.WG || {});

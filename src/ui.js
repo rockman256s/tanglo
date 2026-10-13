@@ -231,6 +231,8 @@
     toggle(t('sound'), 'sound');
     toggle(t('effects'), 'effects');
     toggle(t('haptics'), 'haptics');
+    toggle(t('hard'), 'hard');
+    list.append(h('p', 'settings-label', t('hardHelp')));
 
     const themeRow = h('div', 'menu-row');
     for (const [name, label] of [['neon', 'Neon'], ['wool', 'Wool']]) {

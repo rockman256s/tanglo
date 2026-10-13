@@ -28,7 +28,11 @@
   };
 
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-  const theme = () => WG.themes[save.settings.theme];
+  // Хард-режим: тема с палитрой из одного цвета — стрелки не различить по цвету
+  const theme = () => {
+    const t = WG.themes[save.settings.theme];
+    return save.settings.hard ? { ...t, palette: [t.mono] } : t;
+  };
   // Вид канваса: зум/пан для плотных полей (IMP B5). экран = мир * scale + t
   const view = { scale: 1, tx: 0, ty: 0 };
   function resetView() {
@@ -118,7 +122,7 @@
     save.settings[key] = value;
     persist();
     WG.audio.setOptions(save.settings);
-    if (key === 'theme') draw();
+    if (key === 'theme' || key === 'hard') draw();
     if (key === 'lang') {
       WG.i18n.setLanguage(value);
       WG.ui.relabel();
